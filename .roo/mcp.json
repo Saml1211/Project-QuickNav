@@ -1,0 +1,100 @@
+{
+  "mcpServers": {
+    "context7": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@upstash/context7-mcp@latest"
+      ],
+      "alwaysAllow": [
+        "resolve-library-id",
+        "get-library-docs"
+      ]
+    },
+    "Knowledge Graph": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@smithery/cli@latest",
+        "run",
+        "@itseasy21/mcp-knowledge-graph",
+        "--config",
+        "\"{}\""
+      ],
+      "alwaysAllow": [
+        "create_relations",
+        "create_entities",
+        "add_observations",
+        "delete_entities",
+        "delete_observations",
+        "delete_relations",
+        "read_graph",
+        "search_nodes",
+        "open_nodes",
+        "update_relations",
+        "update_entities"
+      ]
+    },
+    "tavily-mcp": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@smithery/cli@latest",
+        "run",
+        "@tavily-ai/tavily-mcp",
+        "--key",
+        "21c4fd21-fa7a-4aa4-9f17-5aaa1eb2ebc8"
+      ],
+      "disabled": true,
+      "alwaysAllow": []
+    },
+    "exa": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@smithery/cli@latest",
+        "run",
+        "exa",
+        "--key",
+        "21c4fd21-fa7a-4aa4-9f17-5aaa1eb2ebc8"
+      ],
+      "disabled": false,
+      "alwaysAllow": []
+    },
+    "@ScrapeGraphAI-scrapegraph-mcp": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@smithery/cli@latest",
+        "run",
+        "@ScrapeGraphAI/scrapegraph-mcp",
+        "--config",
+        "\"{\\\"scrapegraphApiKey\\\":\\\"sgai-eb6c54d3-186b-4557-bd22-de30b6183401\\\"}\""
+      ],
+      "disabled": false,
+      "alwaysAllow": []
+    },
+    "toolbox": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@smithery/cli@latest",
+        "run",
+        "@smithery/toolbox",
+        "--key",
+        "21c4fd21-fa7a-4aa4-9f17-5aaa1eb2ebc8"
+      ]
+    },
+    "brave-search": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@smithery/cli@latest",
+        "run",
+        "@smithery-ai/brave-search",
+        "--key",
+        "21c4fd21-fa7a-4aa4-9f17-5aaa1eb2ebc8"
+      ]
+    }
+  }
+}

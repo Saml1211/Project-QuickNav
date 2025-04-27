@@ -1,0 +1,30 @@
+# Active Context – Project QuickNav
+
+## Current Focus
+
+All major components of Project QuickNav have been implemented:
+- Python backend for folder lookup
+- AutoHotkey GUI for user interaction
+- MCP server for AI/automation integration
+
+Current focus has shifted from development to stabilization, testing, and preparation for broader use.
+
+## Recent Changes
+
+- Completed initial implementation of all three core components.
+- Integrated backend with both frontend and MCP server.
+- Validated end-to-end operation for user and AI workflows.
+
+## Potential Next Steps
+
+- **Comprehensive Testing:** Expand test coverage for various input cases, error handling, and integration points.
+- **Packaging & Distribution:** Prepare installation scripts or packages for easy deployment across multiple workstations.
+- **User Documentation:** Develop clear usage and troubleshooting guides.
+- **User Feedback:** Solicit feedback from target users to identify pain points or desired enhancements.
+- **Cross-platform Investigation:** Assess feasibility of replacing/upgrading the frontend for non-Windows environments.
+
+## Active Decisions & Considerations
+
+- Decision to keep the inter-process protocol simple and based on stdout for maximum reliability.
+- Monitor for edge cases in path resolution, especially with atypical project code formats or directory structures.
+- Consideration for future enhancements such as search history, favorites, or direct integration with code editors.
