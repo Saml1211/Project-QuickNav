@@ -32,13 +32,13 @@ Project QuickNav utilizes a three-tier architecture, each layer with a distinct 
 
 1. **User-initiated Flow:**
    - User enters the project code into the AHK interface.
-   - AHK script invokes the Python backend, passing the code.
+   - AHK script invokes the Python backend on-demand, passing the job number as an argument.
    - Backend returns resolved path via stdout.
    - AHK presents the result for user action.
 
 2. **AI-initiated Flow:**
    - AI agent connects via MCP to the server.
-   - MCP server invokes Python backend as needed.
+   - MCP server invokes Python backend on-demand with the proper job number.
    - Path is returned to the AI agent, enabling automated operations.
 
 ### Diagram (Textual)

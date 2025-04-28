@@ -14,6 +14,7 @@ Current focus has shifted from development to stabilization, testing, and prepar
 - Completed initial implementation of all three core components.
 - Integrated backend with both frontend and MCP server.
 - Validated end-to-end operation for user and AI workflows.
+- Fixed issue with AHK script not starting the Python backend correctly by removing the initialization code and only running the backend when needed with the proper job number argument.
 
 ## Potential Next Steps
 
@@ -27,4 +28,5 @@ Current focus has shifted from development to stabilization, testing, and prepar
 
 - Decision to keep the inter-process protocol simple and based on stdout for maximum reliability.
 - Monitor for edge cases in path resolution, especially with atypical project code formats or directory structures.
+- Decision to run the Python backend only when needed rather than as a persistent process, improving reliability and simplifying the workflow.
 - Consideration for future enhancements such as search history, favorites, or direct integration with code editors.

@@ -22,6 +22,7 @@
 
 - Implementation phase is complete
 - All main features are present and integrated
+- Fixed critical issue with the AHK script to properly launch the Python backend only when needed with the correct job number argument
 - Ready for formal testing, packaging, and first round of real user trials
 
 ## Known Issues / Limitations
@@ -30,5 +31,6 @@
 - Path resolution assumes standard directory naming conventions
 - Error handling and edge case management require further validation
 - No persistent state for user preferences or usage history
+- ~~Issue with AHK script not starting the Python backend correctly~~ (RESOLVED)
 
 Project QuickNav is now considered functionally complete and ready to enter the testing and feedback phase.
