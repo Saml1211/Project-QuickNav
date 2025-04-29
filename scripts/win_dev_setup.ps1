@@ -28,9 +28,33 @@ $repoUrl = 'https://github.com/SamLyndon/Project-QuickNav.git'
 $defaultDir = "$env:USERPROFILE\QuickNav"
 if (-not (Test-Path "$PSScriptRoot\lld_navigator.ahk")) {
     if (-not (Test-Path $defaultDir)) {
-        Log "Project not found locally. Cloning repository to $defaultDir..."
-        git clone $repoUrl $defaultDir
-        $Summary += "Cloned repository to $defaultDir"
+        Log "Project not found locally. Checking for git..."
+        $git = Get-Command git -ErrorAction SilentlyContinue
+        if (-not $git) {
+            Log 'Git not found. Installing via winget...'
+            try {
+                winget install -e --id Git.Git -h
+                Start-Sleep -Seconds 10
+                $git = Get-Command git -ErrorAction SilentlyContinue
+            } catch {
+                Log 'Failed to install git via winget.'
+                $git = $null
+            }
+        }
+        if ($git) {
+            Log "Cloning repository to $defaultDir using git..."
+            git clone $repoUrl $defaultDir
+            $Summary += "Cloned repository to $defaultDir (git)"
+        } else {
+            Log "Git not available. Downloading repository ZIP and extracting..."
+            $zipUrl = 'https://github.com/SamLyndon/Project-QuickNav/archive/refs/heads/main.zip'
+            $zipPath = "$env:TEMP\Project-QuickNav.zip"
+            Invoke-WebRequest -Uri $zipUrl -OutFile $zipPath
+            Expand-Archive $zipPath -DestinationPath "$env:TEMP"
+            Move-Item -Force "$env:TEMP\Project-QuickNav-main" $defaultDir
+            Remove-Item $zipPath
+            $Summary += "Downloaded and extracted repository ZIP to $defaultDir"
+        }
     } else {
         Log "Project directory exists at $defaultDir."
         $Summary += "Project found at $defaultDir"
