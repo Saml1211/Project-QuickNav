@@ -100,6 +100,34 @@ Send a `navigate_project` request with a 5-digit string. The result will indicat
 
 ---
 
+## Integration Testing
+
+### AHK Integration Test Suite
+
+Project QuickNav includes a comprehensive integration test suite for the AutoHotkey GUI and its interaction with the Python backend. This suite ensures robust error handling, selection logic, and UI feedback, and supports CI or repeatable local testing.
+
+- **Test location:** `tests/ahk/`
+- **Test runner:** `tests/ahk/run_all_tests.ahk`
+- **Shared utilities:** `tests/ahk/test_utils.ahk` provides standardized assertions and helpers.
+- **Requirements:** [AutoHotkey v2](https://www.autohotkey.com/), Windows environment.
+
+#### Running All Integration Tests
+
+From the project root (with AHK v2 installed), run:
+
+```
+autohotkey tests/ahk/run_all_tests.ahk
+```
+
+This will execute all non-utility test scripts in `tests/ahk/`, print a pass/fail summary, and return an appropriate exit code for use in CI pipelines.
+
+#### Writing and Extending Tests
+
+- Add new AHK test scripts to `tests/ahk/` following the naming convention `test_*.ahk`.
+- Use or extend `test_utils.ahk` for assertion and helper logic.
+- Each test script should `ExitApp 0` on pass, and a nonzero code on fail.
+- See existing tests for patterns covering backend failure simulation, selection flows, and edge case handling.
+
 ## Troubleshooting
 
 | Problem                                 | Solution                                                                                   |
@@ -118,6 +146,8 @@ Send a `navigate_project` request with a 5-digit string. The result will indicat
 ## Contribution & Feedback
 
 This project is actively stabilized and tested. Issues, feedback, and contributions are welcome – especially regarding cross-platform improvements, packaging, and advanced integrations.
+
+> When contributing to or extending the AHK integration tests, see the "Integration Testing" section for test structure and requirements. Contributions of new edge cases, error scenarios, or improved utilities are welcome.
 
 ---
 

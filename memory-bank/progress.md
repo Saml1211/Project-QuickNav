@@ -24,6 +24,9 @@
 - All main features are present and integrated
 - Fixed critical issue with the AHK script to properly launch the Python backend only when needed with the correct job number argument
 - Ready for formal testing, packaging, and first round of real user trials
+- All core error handling and selection logic are covered by automated AHK integration tests.
+- The AHK test runner emits a summary and exit code for CI usage.
+- Recommend integrating test execution into CI/CD, extending `test_utils.ahk`, and adding further edge case and race condition tests.
 
 ## Known Issues / Limitations
 

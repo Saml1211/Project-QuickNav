@@ -2,18 +2,20 @@ import os
 import sys
 import math
 import re
+import tempfile
 
-def print_and_exit(msg):
+def print_status(msg_type: str, msg: str) -> None:
     """
-    Print a message to stdout and exit the program.
+    Print a protocol-prefixed message to stdout and exit.
 
     Args:
-        msg (str): Message to print, prefixed with status.
+        msg_type (str): One of 'SUCCESS', 'ERROR', 'SELECT'.
+        msg (str): Message content.
     """
-    print(msg)
+    print(f"{msg_type}:{msg}")
     sys.exit(0)
 
-def validate_proj_num(arg):
+def validate_proj_num(arg: str) -> str:
     """
     Validate that the provided argument is a 5-digit project number.
 
@@ -23,98 +25,72 @@ def validate_proj_num(arg):
     Returns:
         str: Validated project number.
 
-    Exits:
-        If arg does not match 5 digits.
+    Raises:
+        ValueError: If argument is not a 5-digit number.
     """
     if not re.fullmatch(r"\d{5}", arg):
-        print_and_exit("ERROR:Invalid argument (must be 5-digit project number)")
+        print_status("ERROR", "Invalid input: argument must be a 5-digit project number (numbers only)")
     return arg
 
-def get_onedrive_folder():
+def validate_search_term(term: str) -> str:
+    """
+    Validate and sanitize the search term for folder lookup.
+    Ensures term does not contain shell metacharacters or dangerous input.
+
+    Args:
+        term (str): The user-provided search term.
+
+    Returns:
+        str: Sanitized search term.
+
+    Raises:
+        ValueError: If term is empty or contains disallowed patterns.
+    """
+    # Disallow metacharacters commonly used for shell injection
+    if not term or len(term) > 100:
+        print_status("ERROR", "Search term must be non-empty and under 100 characters")
+    if re.search(r"[^a-zA-Z0-9_\-\s.]", term):
+        print_status("ERROR", "Search term contains disallowed special characters")
+    return term
+
+def get_onedrive_folder() -> str:
     """
     Locate the user's OneDrive - Pro AV Solutions directory.
-    If not found, use a test directory in the temp folder.
+    If not found, use a test directory in the temp folder with clear status messaging.
 
     Returns:
         str: Absolute path to the OneDrive directory or test directory.
     """
     user_profile = os.environ.get("UserProfile")
     if not user_profile:
-        # Fall back to temp directory for testing
-        return setup_test_environment()
-
+        print_status("ERROR", "Environment variable 'UserProfile' not found. Cannot locate OneDrive.")
     onedrive_path = os.path.join(user_profile, "OneDrive - Pro AV Solutions")
     if not os.path.isdir(onedrive_path):
-        # Fall back to temp directory for testing
-        return setup_test_environment()
-
-    # Check for the Project Files folder which contains Project Folders
+        print_status("ERROR", f"OneDrive path not found at: {onedrive_path}")
     project_files_path = os.path.join(onedrive_path, "Project Files")
     if os.path.isdir(project_files_path):
         return project_files_path
-
     return onedrive_path
 
-def setup_test_environment():
+def get_project_folders(onedrive_path: str) -> str:
     """
-    Create a simulated project folder structure in the temp directory.
-    Structure:
-    - Project Folders
-      - 10000 - 10999
-        - 10123 - Project A
-        - 10456 - Project B
-      - 17000 - 17999
-        - 17741 - Test Project
-        - 17742 - Another Project
-    """
-    import tempfile
-
-    base_dir = os.path.join(tempfile.gettempdir(), "Project Folders")
-
-    # Create base directories
-    os.makedirs(os.path.join(base_dir, "10000 - 10999"), exist_ok=True)
-    os.makedirs(os.path.join(base_dir, "17000 - 17999"), exist_ok=True)
-
-    # Create project directories
-    os.makedirs(os.path.join(base_dir, "10000 - 10999", "10123 - Project A"), exist_ok=True)
-    os.makedirs(os.path.join(base_dir, "10000 - 10999", "10456 - Project B"), exist_ok=True)
-    os.makedirs(os.path.join(base_dir, "17000 - 17999", "17741 - Test Project"), exist_ok=True)
-    os.makedirs(os.path.join(base_dir, "17000 - 17999", "17742 - Another Project"), exist_ok=True)
-
-    # Create some subfolders in the test project with numbered prefixes
-    project_dir = os.path.join(base_dir, "17000 - 17999", "17741 - Test Project")
-    os.makedirs(os.path.join(project_dir, "4. System Designs"), exist_ok=True)
-    os.makedirs(os.path.join(project_dir, "1. Sales Handover"), exist_ok=True)
-    os.makedirs(os.path.join(project_dir, "2. BOM & CO"), exist_ok=True)
-    os.makedirs(os.path.join(project_dir, "3. Handover Docs"), exist_ok=True)
-    os.makedirs(os.path.join(project_dir, "5. Floor Plans"), exist_ok=True)
-    os.makedirs(os.path.join(project_dir, "6. Site Photos"), exist_ok=True)
-
-    return base_dir
-
-def get_project_folders(onedrive_path):
-    """
-    Get the Project Folders directory path.
+    Get the Project Folders directory path within OneDrive.
 
     Args:
-        onedrive_path (str): Path to OneDrive or test directory.
+        onedrive_path (str): Path to OneDrive.
 
     Returns:
         str: Project Folders absolute path.
-    """
-    # If onedrive_path is already the Project Folders directory (from test environment)
-    if os.path.basename(onedrive_path) == "Project Folders":
-        return onedrive_path
 
-    # Otherwise, look for Project Folders within the provided path
+    Raises:
+        FileNotFoundError: If 'Project Folders' does not exist.
+    """
     pf_path = os.path.join(onedrive_path, "Project Folders")
     if not os.path.isdir(pf_path):
-        # If not found, use the test environment
-        return setup_test_environment()
-
+        print_status("ERROR", f"'Project Folders' directory missing at expected location: {pf_path}")
     return pf_path
 
-def get_range_folder(proj_num, pf_path):
+def get_range_folder(proj_num: str, pf_path: str) -> str:
     """
     Get the directory path for the thousand-range containing the project.
 
@@ -123,29 +99,24 @@ def get_range_folder(proj_num, pf_path):
         pf_path (str): Path to 'Project Folders'.
 
     Returns:
-        str: Range folder path (e.g. '10000 - 10999').
+        str: Range folder path (e.g., '10000 - 10999').
+
+    Raises:
+        FileNotFoundError: If range folder does not exist.
     """
-    num = int(proj_num)
+    try:
+        num = int(proj_num)
+    except Exception:
+        print_status("ERROR", "Project number must be numeric.")
     start = int(math.floor(num / 1000) * 1000)
     end = start + 999
     range_name = f"{start} - {end}"
     range_path = os.path.join(pf_path, range_name)
-
     if not os.path.isdir(range_path):
-        # If we're using the test environment, the range folder should exist
-        # If it doesn't, there's a problem with the test environment setup
-        if os.path.basename(os.path.dirname(pf_path)) == "Temp" or os.path.basename(pf_path) == "Project Folders":
-            # Try to create the range folder in the test environment
-            try:
-                os.makedirs(range_path, exist_ok=True)
-            except Exception:
-                print_and_exit(f"ERROR:Failed to create range folder {range_name}")
-        else:
-            print_and_exit(f"ERROR:Range folder {range_name} not found")
-
+        print_status("ERROR", f"Range folder '{range_name}' not found in 'Project Folders'.")
     return range_path
 
-def search_project_dirs(proj_num, range_path):
+def search_project_dirs(proj_num: str, range_path: str) -> list:
     """
     Search for all directories matching '[ProjNum] - *' in the range folder.
 
@@ -156,12 +127,11 @@ def search_project_dirs(proj_num, range_path):
     Returns:
         list[str]: List of absolute paths to matching project directories.
     """
-    # Pattern: [ProjNum] - *
     pat = re.compile(rf"^{proj_num} - .+")
     try:
         entries = os.listdir(range_path)
-    except Exception:
-        print_and_exit("ERROR:Unable to list range folder contents")
+    except Exception as e:
+        print_status("ERROR", f"Unable to list range folder contents: {str(e)}")
     matches = []
     for entry in entries:
         full_path = os.path.join(range_path, entry)
@@ -169,7 +139,7 @@ def search_project_dirs(proj_num, range_path):
             matches.append(os.path.abspath(full_path))
     return matches
 
-def search_by_name(search_term, pf_path):
+def search_by_name(search_term: str, pf_path: str) -> list:
     """
     Search for project directories containing the search term in their name.
 
@@ -181,32 +151,23 @@ def search_by_name(search_term, pf_path):
         list[str]: List of absolute paths to matching project directories.
     """
     matches = []
-
-    # Search in all range folders
     try:
         range_folders = os.listdir(pf_path)
-        for range_folder in range_folders:
-            range_path = os.path.join(pf_path, range_folder)
-
-            # Skip if not a directory or doesn't match the range pattern
-            if not os.path.isdir(range_path) or not re.match(r"^\d+ - \d+$", range_folder):
-                continue
-
-            # Search within this range folder
-            try:
-                entries = os.listdir(range_path)
-                for entry in entries:
-                    full_path = os.path.join(range_path, entry)
-
-                    # Check if it's a directory and contains the search term (case insensitive)
-                    if os.path.isdir(full_path) and search_term.lower() in entry.lower():
-                        matches.append(os.path.abspath(full_path))
-            except Exception:
-                # Skip this range folder if there's an error
-                continue
-    except Exception:
-        print_and_exit("ERROR:Unable to search project folders")
-
+    except Exception as e:
+        print_status("ERROR", f"Unable to list folders in Project Folders: {str(e)}")
+    for range_folder in range_folders:
+        range_path = os.path.join(pf_path, range_folder)
+        if not os.path.isdir(range_path) or not re.match(r"^\d+ - \d+$", range_folder):
+            continue
+        try:
+            entries = os.listdir(range_path)
+        except Exception:
+            continue  # Skip ranges with unreadable contents
+        for entry in entries:
+            full_path = os.path.join(range_path, entry)
+            # Check if it's a directory and contains the search term (case insensitive)
+            if os.path.isdir(full_path) and search_term.lower() in entry.lower():
+                matches.append(os.path.abspath(full_path))
     return matches
 
 def main():
@@ -214,44 +175,45 @@ def main():
     Main entry point for the CLI tool.
 
     Accepts a single argument (5-digit project number or search term), resolves the folder(s),
-    and prints the result (or error/selection prompt) to stdout.
+    and prints the result (or error/selection prompt) to stdout using the protocol.
 
     Exits:
         With status message on success or error.
     """
     if len(sys.argv) != 2:
-        print_and_exit("ERROR:Exactly one argument required (project number or search term)")
+        print_status("ERROR", "Exactly one argument required: either a 5-digit project number or a project name search term.")
+    arg = sys.argv[1].strip()
 
-    search_term = sys.argv[1]
+    # Strict input validation
+    is_proj_num = bool(re.fullmatch(r"\d{5}", arg))
+    if is_proj_num:
+        proj_num = validate_proj_num(arg)
+    else:
+        search_term = validate_search_term(arg)
+
+    # Environment and folder checks
     onedrive_folder = get_onedrive_folder()
     pfolder = get_project_folders(onedrive_folder)
 
-    # Check if the input is a 5-digit project number
-    if re.fullmatch(r"\d{5}", search_term):
-        # Process as a project number
-        proj_num = search_term
-        try:
-            range_folder = get_range_folder(proj_num, pfolder)
-            matches = search_project_dirs(proj_num, range_folder)
-        except Exception:
-            matches = []
-
+    if is_proj_num:
+        # Project number lookup
+        range_folder = get_range_folder(proj_num, pfolder)
+        matches = search_project_dirs(proj_num, range_folder)
         if not matches:
-            print_and_exit(f"ERROR:No project folder found for number {proj_num}")
+            print_status("ERROR", f"No project folder found for number {proj_num}. Please check the number or verify folder existence.")
         elif len(matches) == 1:
-            print_and_exit(f"SUCCESS:{matches[0]}")
+            print_status("SUCCESS", matches[0])
         else:
-            print_and_exit("SELECT:" + "|".join(matches))
+            print_status("SELECT", "|".join(matches))
     else:
-        # Process as a search term
+        # Search term lookup
         matches = search_by_name(search_term, pfolder)
-
         if not matches:
-            print_and_exit(f"ERROR:No project folders found containing '{search_term}'")
+            print_status("ERROR", f"No project folders found containing '{search_term}'. Please check spelling or try a different term.")
         elif len(matches) == 1:
-            print_and_exit(f"SUCCESS:{matches[0]}")
+            print_status("SUCCESS", matches[0])
         else:
-            print_and_exit("SEARCH:" + "|".join(matches))
+            print_status("SELECT", "|".join(matches))
 
 if __name__ == "__main__":
     main()
