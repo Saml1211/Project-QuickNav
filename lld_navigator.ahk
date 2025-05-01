@@ -14,6 +14,19 @@ See lld_navigator_controller.ahk for controller implementation and documentation
 #Requires AutoHotkey v2.0
 #SingleInstance Force
 
+; Enable debug mode for development
+global DEBUG_MODE := true
+
+; Set up error handling
+OnError QuickNav_ErrorHandler
+
+; Error handler function
+QuickNav_ErrorHandler(err) {
+    LogError("Unhandled error: " . err.Message . " at line " . err.Line, "ErrorHandler")
+    MsgBox("An error occurred:`n" . err.Message . "`n`nLine: " . err.Line . "`n`nSee error log for details.", "QuickNav Error", 16)
+    return true  ; Continue running the script
+}
+
 #Include "%A_ScriptDir%\lld_navigator_controller.ahk"
 
 ; --- DPI scaling factor and scaling functions ---
