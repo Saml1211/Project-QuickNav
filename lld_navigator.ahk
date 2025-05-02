@@ -27,7 +27,7 @@ QuickNav_ErrorHandler(err) {
     return true  ; Continue running the script
 }
 
-#Include "%A_ScriptDir%\lld_navigator_controller.ahk"
+#Include %A_ScriptDir%\lld_navigator_controller.ahk
 
 ; --- DPI scaling factor and scaling functions ---
 dpiScale := A_ScreenDPI / 96
@@ -656,8 +656,9 @@ UpdateNotificationPanelPosition() {
 
 ; Helper function to get control position and size
 GetControlPosition(ctrl) {
-    pos := Map()
-    ctrl.GetPos(&pos.x, &pos.y, &pos.w, &pos.h)
+    x := y := w := h := 0
+    ctrl.GetPos(&x, &y, &w, &h)
+    pos := Map("x", x, "y", y, "w", w, "h", h)
     return pos
 }
 

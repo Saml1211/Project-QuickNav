@@ -8,7 +8,7 @@
             "program": "${file}",
             "args": [],
             "stopOnEntry": true,
-            "runtime": "C:\\Program Files\\AutoHotkey\\v2\\AutoHotkey.exe"
+            "runtimeExecutable": "C:\\Program Files\\AutoHotkey\\v2\\AutoHotkey64.exe"
         }
     ]
 }
