@@ -11,6 +11,7 @@ Note: Assumes lld_navigator.ahk and lld_navigator_controller.ahk are in project 
 #Requires AutoHotkey v2.0
 #Include %A_ScriptDir%\..\..\lld_navigator_controller.ahk
 #Include ..\..\lld_navigator.ahk
+#Include test_utils.ahk
 
 test_passed := true
 test_fail(msg) {

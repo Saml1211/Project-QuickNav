@@ -9,36 +9,42 @@ Includes:
 
 #Requires AutoHotkey v2.0
 
-global test_passed := true
-global test_msgs := []
+global __TEST_UTILS_AHK_LOADED__ ; Declare guard variable
 
-test_fail(msg) {
-    global test_passed, test_msgs
-    test_passed := false
-    test_msgs.Push("FAIL: " . msg)
-    MsgBox("TEST FAILED: " . msg, "Test Failure", 16)
-}
+if (__TEST_UTILS_AHK_LOADED__ != true) { ; Check if not already loaded/true
+    global __TEST_UTILS_AHK_LOADED__ := true ; Set the flag
 
-test_pass(msg := "") {
-    global test_msgs
-    if (msg != "")
-        test_msgs.Push("PASS: " . msg)
-}
+    global test_passed := true
+    global test_msgs := []
 
-assert_true(expr, msg := "Assertion failed") {
-    if (!expr)
-        test_fail(msg)
-}
+    test_fail(msg) {
+        global test_passed, test_msgs
+        test_passed := false
+        test_msgs.Push("FAIL: " . msg)
+        MsgBox("TEST FAILED: " . msg, "Test Failure", 16)
+    }
 
-assert_eq(actual, expected, msg := "Value mismatch") {
-    if (actual != expected)
-        test_fail(msg . " (expected: " . expected . ", got: " . actual . ")")
-}
+    test_pass(msg := "") {
+        global test_msgs
+        if (msg != "")
+            test_msgs.Push("PASS: " . msg)
+    }
 
-reset_test_state() {
-    global test_passed, test_msgs
-    test_passed := true
-    test_msgs := []
+    assert_true(expr, msg := "Assertion failed") {
+        if (!expr)
+            test_fail(msg)
+    }
+
+    assert_eq(actual, expected, msg := "Value mismatch") {
+        if (actual != expected)
+            test_fail(msg . " (expected: " . expected . ", got: " . actual . ")")
+    }
+
+    reset_test_state() {
+        global test_passed, test_msgs
+        test_passed := true
+        test_msgs := []
+    }
 }
 
 /*

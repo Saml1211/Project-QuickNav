@@ -2,38 +2,42 @@
 
 ## What Works
 
-- Full implementation of the three main components:
-  - Python backend for project directory lookup
-  - AutoHotkey frontend for user interaction and navigation
-  - MCP server for AI and automation integration
-- End-to-end workflow is functional for both human and AI users:
-  - Users can enter a 5-digit code and immediately access the correct project folder
-  - AI agents can trigger navigation and obtain project paths via MCP
+- Core implementation of the three main components is complete:
+  - Python backend for project directory lookup.
+  - AutoHotkey frontend for user interaction and navigation (core UI elements in place, some known issues exist).
+  - MCP server for AI and automation integration.
+- Basic end-to-end workflow for job number input and subfolder selection is partially functional for human users, but undergoing debugging.
+- Some AHK runtime warnings (e.g. `A_IsDarkMode`, `this` in `ShowNotification`) have been resolved.
 
 ## What's Left to Build
 
-- Expand automated and manual test coverage
-- Package the solution for easy installation and update (e.g., installer, script bundle)
-- Create comprehensive user and administrator documentation
-- Gather initial user feedback and iterate on usability
-- Explore value-added features (history, favorites, cross-platform support)
+- **Stabilize AHK Frontend:** Resolve remaining errors and ensure reliable operation of `lld_navigator.ahk`.
+- **Resolve Linter Issues:** Address persistent AHK linter errors (include paths, `test_fail` conflicts) if they are not benign, or configure linter appropriately.
+- **Expand automated and manual test coverage** for the AHK frontend once stabilized.
+- Package the solution for easy installation and update (e.g., installer, script bundle).
+- Create comprehensive user and administrator documentation.
+- Gather initial user feedback and iterate on usability.
+- Explore value-added features (history, favorites, cross-platform support).
 
 ## Current Status
 
-- Implementation phase is complete
-- All main features are present and integrated
-- Fixed critical issue with the AHK script to properly launch the Python backend only when needed with the correct job number argument
-- Ready for formal testing, packaging, and first round of real user trials
-- All core error handling and selection logic are covered by automated AHK integration tests.
+- Implementation phase is largely complete, but `lld_navigator.ahk` requires further debugging.
+- Iterative testing and refinement of the AHK frontend are in progress.
+- All main features are present and integrated, but AHK frontend reliability is not yet 100%.
+- Fixed critical issue with the AHK script to properly launch the Python backend only when needed with the correct job number argument.
+- Ready for more intensive testing once current AHK issues are resolved.
+- All core error handling and selection logic for the backend are covered by automated AHK integration tests.
 - The AHK test runner emits a summary and exit code for CI usage.
-- Recommend integrating test execution into CI/CD, extending `test_utils.ahk`, and adding further edge case and race condition tests.
+- Recommend integrating test execution into CI/CD, extending `test_utils.ahk`, and adding further edge case and race condition tests once the main AHK script is stable.
 
 ## Known Issues / Limitations
 
-- Tool is currently Windows-only due to AutoHotkey dependency in the frontend
-- Path resolution assumes standard directory naming conventions
-- Error handling and edge case management require further validation
-- No persistent state for user preferences or usage history
+- **AHK Script Errors:** `lld_navigator.ahk` is not fully functional and has known errors that need fixing.
+- **Linter Discrepancies:** AHK linter shows errors for include paths and `test_fail` conflicts that may not reflect runtime reality or are due to tool limitations in applying fixes.
+- Tool is currently Windows-only due to AutoHotkey dependency in the frontend.
+- Path resolution assumes standard directory naming conventions.
+- Error handling and edge case management in the AHK frontend require further validation.
+- No persistent state for user preferences or usage history beyond what's implemented.
 - ~~Issue with AHK script not starting the Python backend correctly~~ (RESOLVED)
 
-Project QuickNav is now considered functionally complete and ready to enter the testing and feedback phase.
+Project QuickNav is functionally near complete, with current efforts focused on debugging and stabilizing the AHK frontend.

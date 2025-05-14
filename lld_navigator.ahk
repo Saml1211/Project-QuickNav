@@ -17,9 +17,12 @@ See lld_navigator_controller.ahk for controller implementation and documentation
 ; Enable debug mode for development
 global DEBUG_MODE := true
 
-; Set up error handling
-OnError QuickNav_ErrorHandler
+; Define global for dark mode support (updated after settings load)
+global A_IsDarkMode := false
+global settings ; To store loaded settings
+global projectSelectionGB ; For GuiSize
 
+; Set up error handling
 ; Error handler function
 QuickNav_ErrorHandler(err) {
     LogError("Unhandled error: " . err.Message . " at line " . err.Line, "ErrorHandler")
@@ -27,7 +30,19 @@ QuickNav_ErrorHandler(err) {
     return true  ; Continue running the script
 }
 
-#Include %A_ScriptDir%\lld_navigator_controller.ahk
+; Set up error handling
+OnError(QuickNav_ErrorHandler)
+
+#Include %A_ScriptDir%\lld_navigator_controller.ahk ; Assumes controller is in the same dir
+
+; Load settings early to apply theme and A_IsDarkMode
+settings := Controller_LoadSettings() ; Assuming this function exists in the controller
+if (IsObject(settings) && settings.Has("theme") && settings.theme == "Dark") {
+    A_IsDarkMode := true
+} else {
+    A_IsDarkMode := false
+}
+
 
 ; --- DPI scaling factor and scaling functions ---
 dpiScale := A_ScreenDPI / 96
@@ -54,7 +69,7 @@ versionStr := FileExist("VERSION.txt") ? Trim(FileRead("VERSION.txt")) : "dev"
 
 ; --- Paths for persistence ---
 recentDataPath := A_AppData . "\QuickNav\recent.json"
-settingsPath := A_AppData . "\QuickNav\settings.json"
+settingsPath := A_AppData . "\QuickNav\settings.json" ; Used by controller
 logPath := A_AppData . "\QuickNav\error.log"
 
 ; --- Default folders ---
@@ -70,7 +85,7 @@ defaultFolderNames := [
 ; --- Load recents/favorites and settings ---
 recentsData := LoadRecents()
 folderNames := []
-if (recentsData.favorites.Length) {
+if (recentsData.Has("favorites") && (TypeOf(recentsData.favorites) = "Array") && recentsData.favorites.Length) {
     for idx, fname in recentsData.favorites {
         v := ValidateAndNormalizeInputs("00000", fname)
         if v.valid
@@ -82,26 +97,29 @@ if (folderNames.Length == 0) {
         folderNames.Push(fname)
 }
 recentJobs := []
-for idx, job in recentsData.jobs {
-    v := ValidateAndNormalizeInputs(job, folderNames[1])
-    if v.valid
-        recentJobs.Push(v.normalizedJob)
+if (recentsData.Has("jobs") && (TypeOf(recentsData.jobs) = "Array")) {
+    for idx, job in recentsData.jobs {
+        v := ValidateAndNormalizeInputs(job, folderNames.Length > 0 ? folderNames[1] : "") ; Assumes folderNames is not empty
+        if v.valid
+            recentJobs.Push(v.normalizedJob)
+    }
 }
 recentFolders := []
-for idx, f in recentsData.folders {
-    v := ValidateAndNormalizeInputs("00000", f)
-    if v.valid
-        recentFolders.Push(v.normalizedFolder)
+if (recentsData.Has("folders") && (TypeOf(recentsData.folders) = "Array")) {
+    for idx, f in recentsData.folders {
+        v := ValidateAndNormalizeInputs("00000", f)
+        if v.valid
+            recentFolders.Push(v.normalizedFolder)
+    }
 }
 
 ; --- Instantiate main GUI window with resizing support ---
-mainGui := Gui("+AlwaysOnTop +Resize +MinSize340x380", "Project QuickNav v" . versionStr)
+mainGui := Gui("+AlwaysOnTop +Resize +MinSize" . Scale(340) . "x" . Scale(380), "Project QuickNav v" . versionStr)
 
 ; --- Handle window resize events ---
 mainGui.OnEvent("Size", GuiSize)
 
 ; --- Persistent Notification Area (positioned dynamically) ---
-; Create notification controls with placeholder positions - will be positioned later
 notificationPanel := mainGui.Add("GroupBox", "x" Scale(12) " y" Scale(0) " w" Scale(316) " h" Scale(28) " vNotificationPanel BackgroundD3D3D3", "")
 notificationLabel := mainGui.Add("Text", "x" Scale(28) " y" Scale(0) " w" Scale(240) " h" Scale(14) " vNotificationLabel", "")
 notificationClose := mainGui.Add("Button", "x" Scale(280) " y" Scale(0) " w" Scale(36) " h" Scale(20) " vNotificationClose", "✕")
@@ -110,7 +128,7 @@ notificationLabel.Visible := false
 notificationClose.Visible := false
 
 ; --- Job Input Section ---
-mainGui.Add("GroupBox", "x" Scale(12) " y" Scale(10) " w" Scale(316) " h" Scale(60), "Project Selection")
+projectSelectionGB := mainGui.Add("GroupBox", "x" Scale(12) " y" Scale(10) " w" Scale(316) " h" Scale(60), "Project Selection")
 jobLabel := mainGui.Add("Text",    "x" . Scale(28) . " y" . Scale(32) . " w" . Scale(110), "Job Number or Search:")
 jobEdit := mainGui.Add("Edit", "x+" . Scale(6) . " yp w" . Scale(150) . " vJobNumber Section", "")
 jobEdit.ToolTip := "Enter a 5-digit job number or search term. Drag a folder here to auto-fill."
@@ -120,444 +138,309 @@ jobErrorLabel.Visible := false
 ; --- Drag-and-drop for job input with enhanced error handling ---
 OnMessage(0x233, WM_DROPFILES)
 WM_DROPFILES(wParam, lParam, msg, hwnd) {
-    global jobEdit, folderNames, jobErrorLabel
+    global jobEdit, folderNames, jobErrorLabel, folderListView, radioValues
 
     try {
-        ; Check if we have any files dropped
         files := DllCall("shell32\DragQueryFile", "ptr", wParam, "uint", 0xFFFFFFFF, "ptr", 0, "uint", 0)
         if (files <= 0) {
             ShowInlineHint("No valid files were dropped.", "warning")
             return
         }
 
-        ; Get the first dropped file/folder path
-        path := Buffer(1024)
-        if (!DllCall("shell32\DragQueryFile", "ptr", wParam, "uint", 0, "ptr", path, "uint", 1024)) {
+        pathBuf := Buffer(1024)
+        if (!DllCall("shell32\DragQueryFile", "ptr", wParam, "uint", 0, "ptr", pathBuf, "uint", pathBuf.Size)) {
             ShowInlineHint("Could not retrieve the dropped path.", "error")
             LogError("DragQueryFile failed to retrieve path", "WM_DROPFILES")
             return
         }
+        droppedPath := Trim(StrGet(pathBuf))
 
-        ; Process the dropped path
-        droppedPath := Trim(StrGet(path))
-
-        ; Check if path exists
         if (!FileExist(droppedPath)) {
             ShowInlineHint("The dropped path does not exist: " . droppedPath, "error")
             return
         }
-
-        ; Check if it's a directory
         if (!DirExist(droppedPath)) {
             ShowInlineHint("Please drop a folder, not a file.", "warning")
             return
         }
 
-        ; Validate and normalize the input
-        v := ValidateAndNormalizeInputs(droppedPath, folderNames[1])
+        v := ValidateAndNormalizeInputs(droppedPath, folderNames.Length > 0 ? folderNames[1] : "")
         if (!v.valid) {
-            ; Show error in the UI instead of a modal dialog
             jobErrorLabel.Value := v.errorMsg
             jobErrorLabel.Visible := true
-            jobEdit.Opt("BackgroundFFDDDD")  ; Highlight with error color
+            jobEdit.Opt("BackgroundFFDDDD")
             ShowInlineHint("Invalid path format. See error below.", "error")
-
-            ; Clear error after a delay
-            SetTimer(() => (
-                jobErrorLabel.Visible := false,
-                jobEdit.Opt("BackgroundWhite")
-            ), -5000)
+            SetTimer(() => (jobErrorLabel.Visible := false, ApplyThemeToControl(jobEdit, settings.theme)), -5000)
         } else {
-            ; Clear any previous errors
             jobErrorLabel.Visible := false
-            jobEdit.Opt("BackgroundWhite")
-
-            ; Set the job number and show success message
+            ApplyThemeToControl(jobEdit, settings.theme)
             jobEdit.Value := v.normalizedJob
             ShowInlineHint("Detected job " . v.normalizedJob . " from path.", "success")
 
-            ; If we have a valid folder match, select it in the ListView
             if (v.normalizedFolder && folderNames.Length > 0) {
                 folderIndex := folderNames.IndexOf(v.normalizedFolder)
                 if (folderIndex > 0) {
-                    folderListView.Modify(folderIndex, "Select Focus Vis")
+                    folderListView.Modify(folderIndex, "Select Focus")
+                    folderListView.EnsureVisible(folderIndex)
                     radioValues[folderIndex] := true
                     FlashListViewItem(folderIndex)
                 }
             }
         }
     } catch as e {
-        ; Log the error and show a user-friendly message
         LogError("Drag and drop error: " . e.Message, "WM_DROPFILES")
         ShowInlineHint("An error occurred processing the dropped item.", "error")
     } finally {
-        ; Always clean up the drop handle
-        if (IsSet(wParam) && wParam)
+        if (wParam)
             DllCall("shell32\DragFinish", "ptr", wParam)
     }
 }
 
-; --- Subfolder Selection (Radio group with scrolling) ---
+; --- Subfolder Selection ---
 folderGroupBox := mainGui.Add("GroupBox", "x" Scale(12) " y" Scale(80) " w" Scale(316) " h" Scale(160), "Select Subfolder")
-
-; Create a ListView to act as a scrollable container with visual feedback
-folderListView := mainGui.Add("ListView", "x" Scale(20) " y" Scale(100) " w" Scale(300) " h" Scale(130) " -Hdr -Multi -ReadOnly -LV0x10000 AltSubmit Grid Background" . (A_IsDarkMode ? "222222" : "FFFFFF"), ["Folder"])
+folderListView := mainGui.Add("ListView", "x" Scale(20) " y" Scale(100) " w" Scale(300) " h" Scale(130) " -Hdr -Multi -ReadOnly -LV0x10000 AltSubmit Grid Background" . (A_IsDarkMode ? "222222" : "FFFFFF") . " vFolderListView", ["Folder"])
 folderListView.OnEvent("Click", FolderListViewClick)
 folderListView.OnEvent("ItemFocus", FolderListViewFocus)
+OnMessage(0x200, WM_MOUSEMOVE)
 
-; Add hover effect for ListView
-OnMessage(0x200, WM_MOUSEMOVE)  ; Track mouse movement for hover effects
-
-; Set up radio buttons
-y_radio := Scale(100)
-radioCtrls := []
 radioValues := []
-
-; Add folders to the ListView
 Loop folderNames.Length {
     folderListView.Add("", folderNames[A_Index])
-    radioValues.Push(false)  ; Initialize all to false
+    radioValues.Push(false)
+}
+if (folderNames.Length > 0) {
+    folderListView.Modify(1, "Select Focus")
+    radioValues[1] := true
 }
 
-; Set the first item as selected
-folderListView.Modify(1, "Select Focus")
-radioValues[1] := true
-
-; Add Help/About button
 btnAbout := mainGui.Add("Button", "x" Scale(28) " y" Scale(320) " w" Scale(100) " h" Scale(22), "Help/About")
 btnAbout.OnEvent("Click", (*) => ShowAboutDialog())
-
-; Add favorite hint
 favHint := mainGui.Add("Text", "x" Scale(32) " y" Scale(240) " w" Scale(250) " cGray", "Tip: Right-click a subfolder to favorite/unfavorite")
 
-; Handle ListView click events
 FolderListViewClick(ctrl, rowNum) {
     global radioValues, folderListView
-
-    ; Clear previous selection
     Loop radioValues.Length
         radioValues[A_Index] := false
-
-    ; Set new selection
-    if (rowNum > 0 && rowNum <= radioValues.Length)
+    if (rowNum > 0 && rowNum <= radioValues.Length) {
         radioValues[rowNum] := true
-
-    ; Update visual selection
-    folderListView.Modify(rowNum, "Select Focus Vis")
-
-    ; Provide visual feedback
-    FlashListViewItem(rowNum)
+        folderListView.Modify(rowNum, "Select Focus")
+        folderListView.EnsureVisible(rowNum)
+        FlashListViewItem(rowNum)
+    }
 }
 
-; Handle ListView focus events
 FolderListViewFocus(ctrl, rowNum) {
     global radioValues
-
-    ; Clear previous selection
     Loop radioValues.Length
         radioValues[A_Index] := false
-
-    ; Set new selection
-    if (rowNum > 0 && rowNum <= radioValues.Length)
+    if (rowNum > 0 && rowNum <= radioValues.Length) {
         radioValues[rowNum] := true
+    }
 }
 
-; Provide visual feedback when hovering over ListView items
 WM_MOUSEMOVE(wParam, lParam, msg, hwnd) {
-    global folderListView
+    global folderListView, radioValues
     static lastHoverRow := 0
+    hoverRow := 0
 
-    ; Check if mouse is over the ListView
     if (hwnd = folderListView.Hwnd) {
-        ; Get the item under the mouse
-        VarSetStrCapacity(&lvhti, 24)
-        NumPut("UInt", 24, lvhti, 0)
-        NumPut("Int", lParam & 0xFFFF, lvhti, 8)
-        NumPut("Int", (lParam >> 16) & 0xFFFF, lvhti, 12)
+        lvhti := Buffer(24)
+        lvhti.Fill(0)
+        NumPut("Int", lParam & 0xFFFF, lvhti, 0)
+        NumPut("Int", (lParam >> 16) & 0xFFFF, lvhti, 4)
+        SendMessage(0x1012, 0, lvhti.Ptr, folderListView.Hwnd) ; LVM_SUBITEMHITTEST
+        itemIndex := NumGet(lvhti, 12, "Int")
 
-        SendMessage(0x1012, 0, &lvhti, folderListView.Hwnd)  ; LVM_HITTEST
-        hoverRow := NumGet(lvhti, 16, "Int") + 1
+        if IsNumber(itemIndex) && itemIndex >= 0 {
+            hoverRow := itemIndex + 1
+        } else {
+            hoverRow := 0
+        }
 
-        ; If hovering over a different row, update hover effect
-        if (hoverRow != lastHoverRow && hoverRow > 0) {
-            ; Reset previous hover row
-            if (lastHoverRow > 0 && folderListView.GetNext(lastHoverRow - 1, "Selected") != lastHoverRow)
+        if (hoverRow != lastHoverRow) {
+            if (lastHoverRow > 0 && folderListView.GetCount() >= lastHoverRow && !(radioValues.Has(lastHoverRow) && radioValues[lastHoverRow])) {
                 folderListView.Modify(lastHoverRow, "-Select")
-
-            ; Set hover effect on current row if not already selected
-            if (folderListView.GetNext(hoverRow - 1, "Selected") != hoverRow)
+            }
+            if (hoverRow > 0 && folderListView.GetCount() >= hoverRow && !(radioValues.Has(hoverRow) && radioValues[hoverRow])) {
                 folderListView.Modify(hoverRow, "+Select -Focus")
-
+            }
             lastHoverRow := hoverRow
         }
     }
 }
 
-; Flash an item in the ListView for visual feedback
 FlashListViewItem(rowNum) {
-    global folderListView
-
-    ; Save current colors
-    originalBgColor := folderListView.GetBGColor()
-    originalTextColor := folderListView.GetTextColor()
-
-    ; Flash with highlight color
-    folderListView.SetBGColor("3399FF")
-    folderListView.SetTextColor("FFFFFF")
-    folderListView.Redraw()
-
-    ; Reset after a short delay
-    SetTimer(() => (
-        folderListView.SetBGColor(originalBgColor),
-        folderListView.SetTextColor(originalTextColor),
-        folderListView.Redraw()
-    ), -150)
+    return ; Simplified
 }
 
-; --- Right-click favorites context menu ---
 global currentFolderIndex := 0
 global folderContextMenu := Menu()
 folderContextMenu.Add("Toggle Favorite", (*) => Controller_ToggleFavorite(folderNames[currentFolderIndex]))
 
-; Add context menu to ListView
-folderListView.OnEvent("ContextMenu", FolderListViewContextMenu)
-
-; Handle ListView context menu events
 FolderListViewContextMenu(ctrl, rowNum) {
     global currentFolderIndex, folderContextMenu, folderNames
-
-    ; Get the row under the mouse
     if (rowNum > 0 && rowNum <= folderNames.Length) {
         currentFolderIndex := rowNum
         folderContextMenu.Show()
     }
 }
+folderListView.OnEvent("ContextMenu", FolderListViewContextMenu)
 
-; --- Preferences Dialog, Theming, and UX helpers ---
+
+; --- Preferences Dialog ---
+global prefControlsMap := Map() ; To store controls for preferences dialog
+
 ShowPreferencesDialog() {
-    global folderNames
-    static prefGui, controls
-    settings := LoadSettings()
-    if IsSet(prefGui) && prefGui {
+    global folderNames, settings, prefControlsMap ; Use global settings and prefControlsMap
+    
+    currentSettings := Type(settings) = "Map" ? settings : Controller_LoadSettings()
+
+    static prefGui ; Make prefGui static to allow Destroy if already open
+    if IsObject(prefGui) && prefGui.Hwnd {
         prefGui.Destroy()
     }
     prefGui := Gui("+AlwaysOnTop", "Preferences / Settings")
-    controls := Map()
+    prefControlsMap.Clear() ; Clear previous controls
 
-    ; Create controls with consistent spacing
-    yPos := 12
-    yStep := 32
+    yPos := Scale(12)
+    yStep := Scale(32)
 
-    ; Default Folder
-    prefGui.Add("Text", "x12 y" . yPos . " w120 h20", "Default Folder:")
-    defaultFolder := settings.Has("defaultFolder") ? settings["defaultFolder"] : (folderNames.Length ? folderNames[1] : "")
-    controls["defaultFolder"] := prefGui.Add("DropDownList", "x140 y" . yPos . " w150 vDefaultFolder", folderNames)
-    controls["defaultFolder"].Choose(defaultFolder ? folderNames.IndexOf(defaultFolder) + 1 : 1)
+    prefGui.Add("Text", "x" . Scale(12) . " y" . yPos . " w" . Scale(120) . " h" . Scale(20), "Default Folder:")
+    defaultFolderVal := currentSettings.Has("defaultFolder") ? currentSettings["defaultFolder"] : (folderNames.Length ? folderNames[1] : "")
+    prefControlsMap["defaultFolder"] := prefGui.Add("DropDownList", "x" . Scale(140) . " y" . yPos . " w" . Scale(150) . " vDefaultFolder", folderNames)
+    if (folderNames.Length > 0)
+        prefControlsMap["defaultFolder"].Choose(defaultFolderVal && folderNames.HasValue(defaultFolderVal) ? folderNames.IndexOf(defaultFolderVal) : 1)
+    else
+        prefControlsMap["defaultFolder"].Enabled := false
 
-    ; Job Input Behavior
     yPos += yStep
-    prefGui.Add("Text", "x12 y" . yPos . " w120 h20", "Job Input Behavior:")
+    prefGui.Add("Text", "x" . Scale(12) . " y" . yPos . " w" . Scale(120) . " h" . Scale(20), "Job Input Behavior:")
     jobInputOpts := ["Prompt", "Auto-fill Last", "Auto-fill Favorite"]
-    defaultJobInput := settings.Has("jobInputMode") ? settings["jobInputMode"] : "Prompt"
-    controls["jobInputMode"] := prefGui.Add("DropDownList", "x140 y" . yPos . " w150 vJobInputMode", jobInputOpts)
-    controls["jobInputMode"].Choose(jobInputOpts.IndexOf(defaultJobInput) + 1)
+    defaultJobInputVal := currentSettings.Has("jobInputMode") ? currentSettings["jobInputMode"] : "Prompt"
+    prefControlsMap["jobInputMode"] := prefGui.Add("DropDownList", "x" . Scale(140) . " y" . yPos . " w" . Scale(150) . " vJobInputMode", jobInputOpts)
+    prefControlsMap["jobInputMode"].Choose(jobInputOpts.HasValue(defaultJobInputVal) ? jobInputOpts.IndexOf(defaultJobInputVal) : 1)
 
-    ; Theme
     yPos += yStep
-    prefGui.Add("Text", "x12 y" . yPos . " w120 h20", "Theme:")
+    prefGui.Add("Text", "x" . Scale(12) . " y" . yPos . " w" . Scale(120) . " h" . Scale(20), "Theme:")
     themeOpts := ["Light", "Dark", "High Contrast"]
-    defaultTheme := settings.Has("theme") ? settings["theme"] : "Light"
-    controls["theme"] := prefGui.Add("DropDownList", "x140 y" . yPos . " w150 vTheme", themeOpts)
-    controls["theme"].Choose(themeOpts.IndexOf(defaultTheme) + 1)
+    defaultThemeVal := currentSettings.Has("theme") ? currentSettings["theme"] : "Light"
+    prefControlsMap["theme"] := prefGui.Add("DropDownList", "x" . Scale(140) . " y" . yPos . " w" . Scale(150) . " vTheme", themeOpts)
+    prefControlsMap["theme"].Choose(themeOpts.HasValue(defaultThemeVal) ? themeOpts.IndexOf(defaultThemeVal) : 1)
 
-    ; Maximum Recents
     yPos += yStep
-    prefGui.Add("Text", "x12 y" . yPos . " w120 h20", "Maximum Recents:")
-    maxRecents := settings.Has("maxRecents") ? settings["maxRecents"] : 10
-    controls["maxRecents"] := prefGui.Add("Edit", "x140 y" . yPos . " w60 vMaxRecents", maxRecents)
+    prefGui.Add("Text", "x" . Scale(12) . " y" . yPos . " w" . Scale(120) . " h" . Scale(20), "Maximum Recents:")
+    maxRecentsVal := currentSettings.Has("maxRecents") ? currentSettings["maxRecents"] : 10
+    prefControlsMap["maxRecents"] := prefGui.Add("Edit", "x" . Scale(140) . " y" . yPos . " w" . Scale(60) . " vMaxRecents", maxRecentsVal)
 
-    ; Notification Duration
     yPos += yStep
-    prefGui.Add("Text", "x12 y" . yPos . " w120 h20", "Notification Duration (ms):")
-    notifDur := settings.Has("notifDuration") ? settings["notifDuration"] : 3000
-    controls["notifDuration"] := prefGui.Add("Edit", "x140 y" . yPos . " w60 vNotifDuration", notifDur)
+    prefGui.Add("Text", "x" . Scale(12) . " y" . yPos . " w" . Scale(120) . " h" . Scale(20), "Notification Duration (ms):")
+    notifDurVal := currentSettings.Has("notifDuration") ? currentSettings["notifDuration"] : 3000
+    prefControlsMap["notifDuration"] := prefGui.Add("Edit", "x" . Scale(140) . " y" . yPos . " w" . Scale(60) . " vNotifDuration", notifDurVal)
 
-    ; Buttons
-    yPos += yStep + 10
-    btnSave := prefGui.Add("Button", "x30 y" . yPos . " w80 Default", "Save")
-    btnCancel := prefGui.Add("Button", "x120 y" . yPos . " w80", "Cancel")
-    btnReset := prefGui.Add("Button", "x210 y" . yPos . " w80", "Reset App")
+    yPos += yStep + Scale(10)
+    btnSave := prefGui.Add("Button", "x" . Scale(30) . " y" . yPos . " w" . Scale(80) . " Default", "Save")
+    btnCancel := prefGui.Add("Button", "x" . Scale(120) . " y" . yPos . " w" . Scale(80), "Cancel")
+    btnReset := prefGui.Add("Button", "x" . Scale(210) . " y" . yPos . " w" . Scale(80), "Reset App")
 
-    ; Button event handlers
-    btnSave.OnEvent("Click", (*) => (
-        settings["defaultFolder"] := controls["defaultFolder"].Text,
-        settings["jobInputMode"] := controls["jobInputMode"].Text,
-        settings["theme"] := controls["theme"].Text,
-        settings["maxRecents"] := Integer(controls["maxRecents"].Text),
-        settings["notifDuration"] := Integer(controls["notifDuration"].Text),
-        SaveSettings(settings),
-        ApplyTheme(settings["theme"]),
-        ShowNotification("Preferences saved.", "success"),
-        prefGui.Destroy()
-    ))
+    btnSave.OnEvent("Click", HandleSavePreferences.Bind(prefGui)) ; Pass prefGui to destroy it
     btnCancel.OnEvent("Click", (*) => prefGui.Destroy())
     btnReset.OnEvent("Click", (*) => (ResetApp(), prefGui.Destroy()))
 
-    ; Apply current theme to preferences dialog
-    ApplyThemeToPrefsDialog(prefGui, settings.Has("theme") ? settings["theme"] : "Light")
-
-    ; Show dialog with appropriate size
-    prefGui.Show("w310 h" . (yPos + 40))
+    ApplyThemeToPrefsDialog(prefGui, currentSettings.Has("theme") ? currentSettings["theme"] : "Light")
+    prefGui.Show("w" . Scale(310) . " h" . Scale(yPos + 40))
 }
 
-; Helper function to apply theme to preferences dialog
-ApplyThemeToPrefsDialog(prefGui, theme) {
+HandleSavePreferences(prefGuiBound, *) { ; prefGuiBound is the GUI object passed by Bind
+    global settings, A_IsDarkMode, prefControlsMap ; Ensure access to global settings and prefControlsMap
+    
+    newSettings := Map()
+    newSettings["defaultFolder"] := prefControlsMap["defaultFolder"].Text
+    newSettings["jobInputMode"] := prefControlsMap["jobInputMode"].Text
+    newSettings["theme"] := prefControlsMap["theme"].Text
+    newSettings["maxRecents"] := Integer(prefControlsMap["maxRecents"].Text)
+    newSettings["notifDuration"] := Integer(prefControlsMap["notifDuration"].Text)
+    
+    SaveSettings(newSettings)
+    settings := newSettings ; Update global settings cache
+    A_IsDarkMode := (settings.Has("theme") && settings.theme == "Dark")
+    ApplyTheme(settings["theme"])
+    ShowNotification("Preferences saved.", "success")
+    prefGuiBound.Destroy()
+}
+
+
+ApplyThemeToPrefsDialog(guiObj, theme) {
+    bg := "", fgText := "", fgButton := "", bgButton := "", fgInput := "", bgInput := ""
     if (theme = "Dark") {
-        prefGui.Opt("Background20232A")
-        for ctrl in prefGui
-            if InStr(ctrl.Type, "Text")
-                ctrl.Opt("cCCCCCC")
-            else if InStr(ctrl.Type, "Button")
-                ctrl.Opt("Background333333 cCCCCCC")
+        bg := "20232A", fgText := "CCCCCC", fgButton := "CCCCCC", bgButton := "333333", fgInput := "EEEEEE", bgInput := "333333"
     } else if (theme = "High Contrast") {
-        prefGui.Opt("Background000000")
-        for ctrl in prefGui
-            if InStr(ctrl.Type, "Text")
-                ctrl.Opt("cFFFFFF")
-            else if InStr(ctrl.Type, "Button")
-                ctrl.Opt("BackgroundFFFF00 c000000")
+        bg := "000000", fgText := "FFFFFF", fgButton := "000000", bgButton := "FFFF00", fgInput := "000000", bgInput := "FFFFFF"
     } else {
-        prefGui.Opt("BackgroundFFFFFF")
-        for ctrl in prefGui
-            if InStr(ctrl.Type, "Text")
-                ctrl.Opt("c333333")
-            else if InStr(ctrl.Type, "Button")
-                ctrl.Opt("BackgroundF0F0F0 c333333")
+        bg := "FFFFFF", fgText := "333333", fgButton := "333333", bgButton := "F0F0F0", fgInput := "000000", bgInput := "White"
+    }
+    guiObj.Opt("Background" . bg)
+    for ctrl in guiObj {
+        if InStr(ctrl.Type, "Text") || InStr(ctrl.Type, "GroupBox_Label")
+            ctrl.Opt("c" . fgText)
+        else if InStr(ctrl.Type, "Button")
+            ctrl.Opt("Background" . bgButton . " c" . fgButton)
+        else if InStr(ctrl.Type, "DropDownList") || InStr(ctrl.Type, "Edit")
+            ctrl.Opt("Background" . bgInput . " c" . fgInput)
     }
 }
+
 ApplyTheme(theme := "Light") {
     global mainGui, notificationPanel, notificationLabel, notificationClose, loaderLabel, progressBar, statusText
-    global btnOpen, btnCancel, btnAbout, jobLabel, jobEdit, jobErrorLabel, radioCtrls, favHint, debugCheckbox
+    global btnOpen, btnCancel, btnAbout, jobLabel, jobEdit, jobErrorLabel, favHint, debugCheckbox, folderListView
+
+    bg := "", panelBg := "", panelFg := "", loaderFg := "", progressBg := "", progressFg := "", statusFg := ""
+    btnOpenBg := "", btnOpenFg := "", btnCancelBg := "", btnCancelFg := "", btnAboutBg := "", btnAboutFg := ""
+    notifCloseBg := "", notifCloseFg := "", jobLabelFg := "", jobEditBg := "", jobEditFg := "", jobErrorFg := ""
+    favHintFg := "", debugCbFg := "", lvBg := "", lvFg := "", gbLabelFg := ""
 
     if (theme = "Dark") {
-        ; Main window and panels
-        mainGui.Opt("Background20232A")
-        notificationPanel.Opt("Background444444")
-        notificationLabel.Opt("cDDDDDD")
-
-        ; Status and progress indicators
-        loaderLabel.Opt("cAACCFF")
-        progressBar.Opt("c33AAFF")
-        statusText.Opt("cCCCCCC")
-
-        ; Buttons
-        btnOpen.Opt("Background222222 c00CC99")
-        btnCancel.Opt("Background222222 cFF6688")
-        btnAbout.Opt("Background333333 cCCCCCC")
-        notificationClose.Opt("Background333333 cDDDDDD")
-
-        ; Input fields and labels
-        jobLabel.Opt("cCCCCCC")
-        jobEdit.Opt("Background333333 cEEEEEE")
-        jobErrorLabel.Opt("cFF6666")
-
-        ; Radio buttons and hints
-        favHint.Opt("cAAAAAA")
-        for ctrl in radioCtrls
-            ctrl.Opt("cCCCCCC")
-
-        ; Debug checkbox
-        debugCheckbox.Opt("cCCCCCC")
-
-        ; ListView styling
-        folderListView.SetBGColor("222222")
-        folderListView.SetTextColor("CCCCCC")
-
-        ; GroupBoxes - find all GroupBox controls and style them
-        for ctrl in mainGui
-            if InStr(ctrl.Type, "GroupBox")
-                ctrl.Opt("cAAAAAA")
-
+        bg := "20232A", panelBg := "444444", panelFg := "DDDDDD", loaderFg := "AACCFF", progressBg := "20232A", progressFg := "33AAFF", statusFg := "CCCCCC"
+        btnOpenBg := "222222", btnOpenFg := "00CC99", btnCancelBg := "222222", btnCancelFg := "FF6688", btnAboutBg := "333333", btnAboutFg := "CCCCCC"
+        notifCloseBg := "333333", notifCloseFg := "DDDDDD", jobLabelFg := "CCCCCC", jobEditBg := "333333", jobEditFg := "EEEEEE", jobErrorFg := "FF6666"
+        favHintFg := "AAAAAA", debugCbFg := "CCCCCC", lvBg := "222222", lvFg := "CCCCCC", gbLabelFg := "AAAAAA"
     } else if (theme = "High Contrast") {
-        ; Main window and panels
-        mainGui.Opt("Background000000")
-        notificationPanel.Opt("BackgroundFFFF00")
-        notificationLabel.Opt("c000000")
-
-        ; Status and progress indicators
-        loaderLabel.Opt("cFFFFFF")
-        progressBar.Opt("cFFFFFF")
-        statusText.Opt("cFFFFFF")
-
-        ; Buttons
-        btnOpen.Opt("BackgroundFFFF00 c000000")
-        btnCancel.Opt("BackgroundFF0000 cFFFFFF")
-        btnAbout.Opt("Background000000 cFFFF00")
-        notificationClose.Opt("BackgroundFFFF00 c000000")
-
-        ; Input fields and labels
-        jobLabel.Opt("cFFFFFF")
-        jobEdit.Opt("BackgroundFFFFFF c000000")
-        jobErrorLabel.Opt("cFF0000")
-
-        ; Radio buttons and hints
-        favHint.Opt("cFFFF00")
-        for ctrl in radioCtrls
-            ctrl.Opt("cFFFFFF")
-
-        ; Debug checkbox
-        debugCheckbox.Opt("cFFFFFF")
-
-        ; ListView styling
-        folderListView.SetBGColor("000000")
-        folderListView.SetTextColor("FFFFFF")
-
-        ; GroupBoxes - find all GroupBox controls and style them
-        for ctrl in mainGui
-            if InStr(ctrl.Type, "GroupBox")
-                ctrl.Opt("cFFFFFF")
-
+        bg := "000000", panelBg := "FFFF00", panelFg := "000000", loaderFg := "FFFFFF", progressBg := "000000", progressFg := "FFFFFF", statusFg := "FFFFFF"
+        btnOpenBg := "FFFF00", btnOpenFg := "000000", btnCancelBg := "FF0000", btnCancelFg := "FFFFFF", btnAboutBg := "000000", btnAboutFg := "FFFF00"
+        notifCloseBg := "FFFF00", notifCloseFg := "000000", jobLabelFg := "FFFFFF", jobEditBg := "FFFFFF", jobEditFg := "000000", jobErrorFg := "FF0000"
+        favHintFg := "FFFF00", debugCbFg := "FFFFFF", lvBg := "000000", lvFg := "FFFFFF", gbLabelFg := "FFFFFF"
     } else {
-        ; Main window and panels
-        mainGui.Opt("BackgroundFFFFFF")
-        notificationPanel.Opt("BackgroundD3D3D3")
-        notificationLabel.Opt("c333333")
-
-        ; Status and progress indicators
-        loaderLabel.Opt("c3366AA")
-        progressBar.Opt("c3366AA")
-        statusText.Opt("c333333")
-
-        ; Buttons
-        btnOpen.Opt("BackgroundF0F0F0 c005577")
-        btnCancel.Opt("BackgroundF0F0F0 cAA4455")
-        btnAbout.Opt("BackgroundF5F5F5 c333333")
-        notificationClose.Opt("BackgroundF0F0F0 c333333")
-
-        ; Input fields and labels
-        jobLabel.Opt("c333333")
-        jobEdit.Opt("BackgroundWhite c000000")
-        jobErrorLabel.Opt("cDD0000")
-
-        ; Radio buttons and hints
-        favHint.Opt("cGray")
-        for ctrl in radioCtrls
-            ctrl.Opt("c333333")
-
-        ; Debug checkbox
-        debugCheckbox.Opt("c333333")
-
-        ; ListView styling
-        folderListView.SetBGColor("FFFFFF")
-        folderListView.SetTextColor("333333")
-
-        ; GroupBoxes - find all GroupBox controls and style them
-        for ctrl in mainGui
-            if InStr(ctrl.Type, "GroupBox")
-                ctrl.Opt("c333333")
+        bg := "FFFFFF", panelBg := "D3D3D3", panelFg := "333333", loaderFg := "3366AA", progressBg := "FFFFFF", progressFg := "3366AA", statusFg := "333333"
+        btnOpenBg := "F0F0F0", btnOpenFg := "005577", btnCancelBg := "F0F0F0", btnCancelFg := "AA4455", btnAboutBg := "F5F5F5", btnAboutFg := "333333"
+        notifCloseBg := "F0F0F0", notifCloseFg := "333333", jobLabelFg := "333333", jobEditBg := "White", jobEditFg := "000000", jobErrorFg := "DD0000"
+        favHintFg := "Gray", debugCbFg := "333333", lvBg := "FFFFFF", lvFg := "333333", gbLabelFg := "333333"
     }
-
+    mainGui.Opt("Background" . bg)
+    notificationPanel.Opt("Background" . panelBg), notificationLabel.Opt("c" . panelFg)
+    loaderLabel.Opt("c" . loaderFg), progressBar.Opt("Background" . progressBg . " c" . progressFg), statusText.Opt("c" . statusFg)
+    btnOpen.Opt("Background" . btnOpenBg . " c" . btnOpenFg), btnCancel.Opt("Background" . btnCancelBg . " c" . btnCancelFg), btnAbout.Opt("Background" . btnAboutBg . " c" . btnAboutFg)
+    notificationClose.Opt("Background" . notifCloseBg . " c" . notifCloseFg)
+    jobLabel.Opt("c" . jobLabelFg), jobEdit.Opt("Background" . jobEditBg . " c" . jobEditFg), jobErrorLabel.Opt("c" . jobErrorFg)
+    favHint.Opt("c" . favHintFg), debugCheckbox.Opt("c" . debugCbFg)
+    folderListView.Opt("Background" . lvBg), folderListView.SetTextColor(lvFg)
+    for ctrl in mainGui {
+        if InStr(ctrl.Type, "GroupBox")
+            ctrl.Opt("c" . gbLabelFg)
+    }
     mainGui.Redraw()
+}
+
+ApplyThemeToControl(ctrlObj, theme) { ; Helper to apply theme to a single control, e.g., jobEdit
+    jobEditBg := "", jobEditFg := ""
+    if (theme = "Dark") {
+        jobEditBg := "333333", jobEditFg := "EEEEEE"
+    } else if (theme = "High Contrast") {
+        jobEditBg := "FFFFFF", jobEditFg := "000000"
+    } else {
+        jobEditBg := "White", jobEditFg := "000000"
+    }
+    if (ctrlObj == jobEdit) {
+        ctrlObj.Opt("Background" . jobEditBg . " c" . jobEditFg)
+    }
 }
 
 ; --- Status + Progress ---
@@ -568,29 +451,25 @@ progressBar := mainGui.Add("Progress", "x" Scale(28) " y" Scale(275) " w" Scale(
 progressBar.Value := 0
 statusText := mainGui.Add("Text", "x" Scale(28) " y" Scale(298) " w" Scale(280) " h" Scale(20) " vStatusText", "Ready")
 
-; --- Reduce flickering with double-buffering ---
-WinSetExStyle("+0x02000000", mainGui.Hwnd)  ; WS_EX_COMPOSITED style to reduce flicker
+WinSetExStyle("+0x02000000", mainGui.Hwnd)
 
-; --- Main Action Buttons ---
 btnOpen := mainGui.Add("Button", "x" Scale(70) " y" Scale(330) " w" Scale(80) " h" Scale(32) " Default", "Open")
 btnOpen.ToolTip := "Start project lookup."
 btnOpen.OnEvent("Click", OpenProject)
 btnCancel := mainGui.Add("Button", "x" Scale(180) " y" Scale(330) " w" Scale(80) " h" Scale(32) " Disabled vBtnCancel", "Cancel")
 btnCancel.ToolTip := "Cancel ongoing lookup."
 btnCancel.OnEvent("Click", (*) => Controller_CancelProcessing())
-; --- Accessibility: Keyboard Shortcuts and Screen Reader Announcements ---
 
-; Hotkeys for main actions (active only when main window is active)
-Hotkey("Enter", OpenHotkey, "On")
-Hotkey("Esc", CancelHotkey, "On")
-Hotkey("F1", HelpHotkey, "On")
-Hotkey("^p", PrefsHotkey, "On")
+Hotkey "Enter", OpenHotkey, "On"
+Hotkey "Esc", CancelHotkey, "On"
+Hotkey "F1", HelpHotkey, "On"
+Hotkey "^p", PrefsHotkey, "On"
 
 OpenHotkey(*) {
     global mainGui, jobEdit, folderListView, btnOpen
     if !WinActive("ahk_id " mainGui.Hwnd)
         return
-    if (jobEdit.Focused || folderListView.Focused)
+    if (jobEdit.Focused || folderListView.Focused || Gui.FocusedCtrl = btnOpen)
         btnOpen.Click()
 }
 
@@ -600,13 +479,16 @@ CancelHotkey(*) {
         return
     if (btnCancel.Enabled)
         btnCancel.Click()
+    else if (WinExist("ahk_class #32770") && (WinGetTitle() ~= "Preferences" || WinGetTitle() ~= "About / Help")) { ; Check for dialogs
+        Send "{Esc}" ; Send Esc to close dialog if Cancel button is not active
+    }
 }
 
 HelpHotkey(*) {
     global mainGui, btnAbout
     if !WinActive("ahk_id " mainGui.Hwnd)
         return
-    btnAbout.Click()
+    ShowAboutDialog() ; Changed from btnAbout.Click() to directly call
 }
 
 PrefsHotkey(*) {
@@ -616,73 +498,46 @@ PrefsHotkey(*) {
     ShowPreferencesDialog()
 }
 
-; Ensure all controls have tooltips for screen readers
 btnOpen.ToolTip := "Start project lookup. Shortcut: Enter"
 btnCancel.ToolTip := "Cancel ongoing lookup. Shortcut: Esc"
 btnAbout.ToolTip := "Show help and about information. Shortcut: F1"
-debugCheckbox.ToolTip := "Enable to see raw output/errors from backend."
 jobEdit.ToolTip := "Enter a 5-digit job number or search term. Drag a folder here to auto-fill. Press Enter to start lookup."
 folderListView.ToolTip := "Select a subfolder. Use arrow keys to navigate. Press Enter to open."
 
-; Announce status changes for screen readers
 AnnounceStatus(msg) {
     global statusText
     statusText.Value := msg
-    SetTimer(() => statusText.Value := "", -2000)
 }
 
-; --- Debug checkbox ---
 debugCheckbox := mainGui.Add("Checkbox", "x" Scale(32) " y" Scale(230) " w" Scale(250) " vDebugMode", "Show Raw Python Output")
 debugCheckbox.ToolTip := "Enable to see raw output/errors from backend."
 
-; --- Update notification panel position based on folder list ---
 UpdateNotificationPanelPosition() {
     global notificationPanel, notificationLabel, notificationClose, debugCheckbox, folderGroupBox
-
-    ; Get the position and size of the folder group box
     folderGroupBoxPos := GetControlPosition(folderGroupBox)
-
-    ; Calculate position based on folder group box
     notifY := folderGroupBoxPos.y + folderGroupBoxPos.h + Scale(10, "spacing")
-
-    ; Update positions
     notificationPanel.Move(, notifY)
     notificationLabel.Move(, notifY + Scale(7))
     notificationClose.Move(, notifY + Scale(4))
-
-    ; Update debug checkbox position to be just above notification panel
     debugCheckbox.Move(, notifY - Scale(25))
 }
 
-; Helper function to get control position and size
 GetControlPosition(ctrl) {
-    x := y := w := h := 0
+    x := 0, y := 0, w := 0, h := 0
     ctrl.GetPos(&x, &y, &w, &h)
-    pos := Map("x", x, "y", y, "w", w, "h", h)
-    return pos
+    return Map("x", x, "y", y, "w", w, "h", h)
 }
 
-; --- Loader/progress animation helpers ---
 SetProgress(val := "") {
     global progressBar, loaderLabel
-    static timerOn := false
-    static dots := 0
-    static lastVal := -1
-
-    ; Batch updates to reduce flickering
-    Critical "On"
-
-    ; Only update if value has changed significantly (at least 5%)
+    static timerOn := false, dots := 0, lastVal := -1
+    Critical true
     if (val != "" && lastVal != -1 && Abs(val - lastVal) < 5 && val != 0 && val != 100) {
-        Critical "Off"
+        Critical false
         return
     }
-
-    ; Update last value
     lastVal := val
-
-    if (val = "") {
-        ; Indeterminate progress
+    if (val = "") { 
         progressBar.Opt("+Smooth")
         progressBar.Marquee := true
         loaderLabel.Value := "Loading"
@@ -692,8 +547,7 @@ SetProgress(val := "") {
             SetTimer(AnimateLoaderLabel, 400)
             timerOn := true
         }
-    } else {
-        ; Determinate progress
+    } else { 
         progressBar.Marquee := false
         progressBar.Opt("+Smooth")
         progressBar.Value := val
@@ -703,113 +557,81 @@ SetProgress(val := "") {
             timerOn := false
         }
     }
-
-    ; End critical section
-    Critical "Off"
+    Critical false
 }
 AnimateLoaderLabel() {
     global loaderLabel
-    static dotCycle := ["", ".", "..", "..."]
-    static i := 1
+    static dotCycle := ["", ".", "..", "..."], i := 1
     loaderLabel.Value := "Loading" . dotCycle[i]
-    i := Mod(i, 4) + 1
+    i := Mod(i, dotCycle.Length) + 1
 }
 
-; --- Notification and inline hint utilities ---
 ShowNotification(msg, type := "info", duration := 0) {
-    global notificationPanel, notificationLabel, notificationClose
+    global notificationPanel, notificationLabel, notificationClose, settings
     static bgColors, fgColors, lastMsg := "", lastType := ""
-    static notificationTimer := 0
 
-    ; Initialize color maps if needed
     if !IsSet(bgColors) {
-        bgColors := Map()
-        bgColors["success"] := "CCE5FF"
-        bgColors["error"] := "FFCCCC"
-        bgColors["warning"] := "FFF5CC"
-        bgColors["info"] := "D3D3D3"
-    }
-    if !IsSet(fgColors) {
-        fgColors := Map()
-        fgColors["success"] := "007700"
-        fgColors["error"] := "C80000"
-        fgColors["warning"] := "A88400"
-        fgColors["info"] := "333333"
+        bgColors := Map("success", "CCE5FF", "error", "FFCCCC", "warning", "FFF5CC", "info", "D3D3D3")
+        fgColors := Map("success", "007700", "error", "C80000", "warning", "A88400", "info", "333333")
     }
 
-    ; Avoid redundant updates for the same message and type
+    effectiveDuration := duration
+    if (duration == 0 && IsObject(settings) && settings.Has("notifDuration")) {
+        effectiveDuration := Integer(settings.notifDuration)
+    }
+
     if (msg == lastMsg && type == lastType && notificationPanel.Visible) {
-        ; Just reset the timer if there is one
-        if (duration && duration > 0) {
-            if (notificationTimer)
-                SetTimer(notificationTimer, 0)
-            notificationTimer := ObjBindMethod(this, "HideNotification")
-            SetTimer(notificationTimer, -duration)
+        if (effectiveDuration && effectiveDuration > 0) {
+            SetTimer(HideNotification, 0) 
+            SetTimer(HideNotification, -Abs(effectiveDuration)) 
         }
         return
     }
-
-    ; Store current message and type
     lastMsg := msg
     lastType := type
 
-    ; Batch UI updates to reduce flickering
-    Critical "On"
-
-    ; Update notification appearance
+    Critical true
     notificationPanel.Opt("Background" . (bgColors.Has(type) ? bgColors[type] : bgColors["info"]))
     notificationLabel.Opt("c" . (fgColors.Has(type) ? fgColors[type] : fgColors["info"]))
     notificationLabel.Value := msg
 
-    ; Make notification visible
     if (!notificationPanel.Visible) {
         notificationPanel.Visible := true
         notificationLabel.Visible := true
         notificationClose.Visible := true
     }
+    notificationClose.OnEvent("Click", HideNotification)
 
-    ; Set up close button
-    notificationClose.OnEvent("Click", (*) => HideNotification())
-
-    ; Set auto-hide timer if duration is specified
-    if (duration && duration > 0) {
-        if (notificationTimer)
-            SetTimer(notificationTimer, 0)
-        notificationTimer := ObjBindMethod(this, "HideNotification")
-        SetTimer(notificationTimer, -duration)
+    if (effectiveDuration && effectiveDuration > 0) {
+        SetTimer(HideNotification, 0) 
+        SetTimer(HideNotification, -Abs(effectiveDuration)) 
     }
-
-    Critical "Off"
+    Critical false
 }
-HideNotification() {
+HideNotification(*) { 
     global notificationPanel, notificationLabel, notificationClose
     notificationPanel.Visible := false
     notificationLabel.Visible := false
     notificationClose.Visible := false
 }
 ShowInlineHint(msg, type:="error") {
-    ShowNotification(msg, type)
+    ShowNotification(msg, type, 5000) 
 }
 
-; --- GUI event handlers: delegate to controller ---
-OpenProject(ctrl, info) {
-    global folderNames, mainGui, radioValues, folderListView
+OpenProject(ctrlObj, info) {
+    global folderNames, mainGui, radioValues, folderListView, settings
 
-    ; Get form values
     params := mainGui.Submit(false)
-    DebugMode := params.DebugMode
-    jobNumber := params.JobNumber
+    currentDebugMode := params.DebugMode
+    currentJobNumber := Trim(params.JobNumber)
 
-    ; Get selected folder from ListView
     selectedFolder := ""
     selectedRow := 0
-
-    ; First try to get the focused row
     focusedRow := folderListView.GetNext(0, "Focused")
-    if (focusedRow > 0) {
+
+    if (focusedRow > 0 && focusedRow <= radioValues.Length) {
         selectedRow := focusedRow
     } else {
-        ; Fall back to radioValues array
         Loop radioValues.Length {
             if (radioValues[A_Index]) {
                 selectedRow := A_Index
@@ -818,91 +640,89 @@ OpenProject(ctrl, info) {
         }
     }
 
-    ; Get the folder name for the selected row
     if (selectedRow > 0 && selectedRow <= folderNames.Length) {
         selectedFolder := folderNames[selectedRow]
+    } else if (folderNames.Length > 0) {
+        selectedFolder := folderNames[1] 
     } else {
-        ; Default to first folder if nothing is selected
-        selectedFolder := folderNames[1]
+        ShowNotification("Error: No subfolders configured.", "error")
+        return
     }
-
-    ; Call the controller function
-    Controller_OpenProject(jobNumber, selectedFolder, DebugMode)
+    Controller_OpenProject(currentJobNumber, selectedFolder, currentDebugMode)
 }
 
-; --- Main GUI event handlers ---
 GuiClose(*) {
-    mainGui.Hide()
-    return
+    ExitApp 
 }
 
-; Handle window resize events
-GuiSize(GuiObj, MinMax, Width, Height) {
+GuiSize(guiObj, MinMax, Width, Height) {
     global mainGui, notificationPanel, notificationLabel, notificationClose, progressBar, statusText
-    global btnOpen, btnCancel, btnAbout, radioCtrls, favHint, debugCheckbox
+    global btnOpen, btnCancel, folderListView, folderGroupBox, jobEdit, jobLabel, projectSelectionGB
 
-    ; Skip if minimized
     if (MinMax = -1)
         return
 
-    ; Calculate new widths based on window size
-    newWidth := Width - Scale(24)  ; Padding on both sides
+    contentWidth := Width - Scale(24)
 
-    ; Resize GroupBoxes
-    for ctrl in mainGui
-        if InStr(ctrl.Type, "GroupBox")
-            ctrl.Move(, , newWidth)
+    for ctrl in mainGui {
+        if InStr(ctrl.Type, "GroupBox") {
+            ctrl.Move(, , contentWidth)
+        }
+    }
+    
+    ; Resize jobEdit based on its groupbox (projectSelectionGB)
+    jobEditXRelToGB := jobLabel.X - projectSelectionGB.X + jobLabel.W + Scale(6)
+    newJobEditW := projectSelectionGB.W - jobEditXRelToGB - Scale(16) ; Scale(16) as right padding in GB
+    jobEdit.Move(jobLabel.X + jobLabel.W + Scale(6), , newJobEditW < Scale(50) ? Scale(50) : newJobEditW)
 
-    ; Resize notification panel and its controls
-    notificationPanel.Move(, , newWidth)
-    notificationLabel.Move(, , newWidth - Scale(76))
-    notificationClose.Move(Scale(newWidth - 36))
 
-    ; Resize progress bar and status text
-    progressBar.Move(, , newWidth - Scale(36))
-    statusText.Move(, , newWidth - Scale(36))
+    lvXRelToGB := folderListView.X - folderGroupBox.X
+    newLvW := folderGroupBox.W - (lvXRelToGB * 2) ; Assuming same padding left/right for LV in GB
+    folderListView.Move(, , newLvW)
 
-    ; Resize radio buttons
-    for ctrl in radioCtrls
-        ctrl.Move(, , newWidth - Scale(66))
+    notificationPanel.Move(, , contentWidth)
+    notificationLabel.Move(, , contentWidth - Scale(76))
+    notificationClose.Move(Width - Scale(12) - notificationClose.W)
 
-    ; Reposition buttons
+    progressX := progressBar.X
+    statusX := statusText.X
+    progressW := contentWidth - (progressX - Scale(12)) * 2
+    statusW := contentWidth - (statusX - Scale(12)) * 2
+    progressBar.Move(, , progressW)
+    statusText.Move(, , statusW)
+    
+    btnWidth := btnOpen.W
     centerX := Width / 2
-    btnOpen.Move(centerX - Scale(90))
-    btnCancel.Move(centerX + Scale(10))
+    btnOpen.Move(centerX - btnWidth - Scale(5))
+    btnCancel.Move(centerX + Scale(5))
 
-    ; Update notification panel position
     UpdateNotificationPanelPosition()
+    mainGui.Redraw()
 }
 
-; --- System Tray and About/Help ---
 AddSystemTrayMenu() {
-    global
-    A_TrayMenu.Delete()
-    ToggleGuiMenu(ItemName, ItemPos, MyMenu) {
-        ToggleGui()
-    }
-    ExitAppMenu(ItemName, ItemPos, MyMenu) {
-        ExitApp()
-    }
+    A_TrayMenu.Delete() 
+    ToggleGuiMenu(*) => ToggleGui()
+    ExitAppMenu(*) => ExitApp()
+    ShowPrefsMenu(*) => ShowPreferencesDialog()
+    ShowAboutMenu(*) => ShowAboutDialog()
+
     A_TrayMenu.Add("Show/Hide QuickNav", ToggleGuiMenu)
-    A_TrayMenu.Add("Preferences...", (*) => ShowPreferencesDialog())
-    A_TrayMenu.Add("Help/About...", (*) => ShowAboutDialog())
-    A_TrayMenu.Add()
+    A_TrayMenu.Add("Preferences...", ShowPrefsMenu)
+    A_TrayMenu.Add("Help/About...", ShowAboutMenu)
+    A_TrayMenu.Add() 
     A_TrayMenu.Add("Exit", ExitAppMenu)
-    try {
-        A_TrayMenu.Default := "Show/Hide QuickNav"
-    } catch {
-        dummy := 1 ; ignore failure
+    try A_TrayMenu.Default := "Show/Hide QuickNav"
+    catch { ; ignore error
     }
-    TraySetIcon("shell32.dll", 44)
+    TraySetIcon("shell32.dll", 44) 
 }
 ShowAboutDialog() {
-    global logPath, versionStr
+    global logPath, versionStr, settings
     txt := "
-    (
+    (LTrim Join`r`n
 Project QuickNav
-Version: See VERSION.txt
+Version: " . versionStr . "
 
 Usage:
  - Enter a 5-digit job number or search term and select a subfolder.
@@ -910,85 +730,91 @@ Usage:
  - Right-click subfolders to favorite.
  - Cancel ongoing operations anytime.
 
-Feature Summary (Batch 3):
+Feature Summary:
  - Inline, persistent notifications (color-coded, dismissible)
  - Animated loader for backend/process work
  - User preferences: favorites, input mode, recents, notifications
- - Light/Dark theming (if enabled in your build)
+ - Light/Dark/High Contrast theming
  - Comprehensive Help/About dialog
 
 Keyboard Shortcuts:
  - Ctrl+Alt+Q: Show or focus QuickNav window
+ - Enter: Open Project (when input or list focused)
+ - Esc: Cancel Operation / Close Dialogs
+ - F1: Help/About
+ - Ctrl+P: Preferences
 
 For detailed documentation, see README.md or INSTALL.md.
     )"
-    GuiObj := Gui("+AlwaysOnTop", "About / Help - QuickNav v" . versionStr)
-    txt := RegExReplace(txt, "Version: See VERSION\.txt", "Version: " . versionStr)
+    static aboutGuiObj ; Make static to allow Destroy if already open
+    if IsObject(aboutGuiObj) && aboutGuiObj.Hwnd {
+        aboutGuiObj.Destroy()
+    }
+    static aboutGuiObj ; Make static to allow Destroy if already open
+    if IsObject(aboutGuiObj) && aboutGuiObj.Hwnd {
+        aboutGuiObj.Destroy()
+    }
+    aboutGuiObj := Gui("+AlwaysOnTop", "About / Help - QuickNav v" . versionStr)
 
-    ; Use proper scaling for all dimensions
+
     editWidth := Scale(410)
-    editHeight := Scale(180, "text")
-    buttonWidth := Scale(120)
+    editHeight := Scale(220, "text") 
+    buttonWidth := Scale(140)
     buttonHeight := Scale(30)
     smallButtonWidth := Scale(90)
     xPadding := Scale(10, "spacing")
     yPadding := Scale(10, "spacing")
-    buttonY := editHeight + Scale(20, "spacing")
+    buttonY := editHeight + yPadding * 2
 
-    ; Calculate dialog dimensions
     dialogWidth := editWidth + (xPadding * 2)
     dialogHeight := buttonY + buttonHeight + yPadding
 
-    ; Add controls with scaled dimensions
-    GuiObj.Add("Edit", "x" . xPadding . " y" . yPadding . " w" . editWidth . " h" . editHeight . " -Wrap ReadOnly", txt)
+    aboutGuiObj.Add("Edit", "x" . xPadding . " y" . yPadding . " w" . editWidth . " h" . editHeight . " -Wrap ReadOnly", txt)
 
-    ; Position buttons with proper spacing
-    btn1X := Scale(30)
-    btn2X := btn1X + buttonWidth + Scale(20, "spacing")
-    btn3X := btn2X + buttonWidth + Scale(20, "spacing")
+    btnCount := 3
+    totalButtonWidth := buttonWidth * 2 + smallButtonWidth + xPadding * (btnCount -1)
+    startX := (dialogWidth - totalButtonWidth) / 2
 
-    btnDiag := GuiObj.Add("Button", "x" . btn1X . " y" . buttonY . " w" . buttonWidth . " h" . buttonHeight, "Open Diagnostics Folder")
-    btnLog := GuiObj.Add("Button", "x" . btn2X . " y" . buttonY . " w" . buttonWidth . " h" . buttonHeight, "View Error Log")
-    GuiObj.Add("Button", "x" . btn3X . " y" . buttonY . " w" . smallButtonWidth . " h" . buttonHeight . " Default", "OK").OnEvent("Click", (*) => GuiObj.Destroy())
+    btnDiag := aboutGuiObj.Add("Button", "x" . startX . " y" . buttonY . " w" . buttonWidth . " h" . buttonHeight, "Open Diagnostics Folder")
+    btnLog := aboutGuiObj.Add("Button", "x+" . xPadding . " yp w" . buttonWidth . " h" . buttonHeight, "View Error Log")
+    aboutGuiObj.Add("Button", "x+" . xPadding . " yp w" . smallButtonWidth . " h" . buttonHeight . " Default", "OK").OnEvent("Click", (*) => aboutGuiObj.Destroy())
 
-    btnDiag.OnEvent("Click", (*) => (Run("explorer.exe " . Chr(34) . DirSplit(logPath)[1] . Chr(34))))
-    btnLog.OnEvent("Click", (*) => (
-        FileExist(logPath)
-        ? Run("notepad.exe " . Chr(34) . logPath . Chr(34))
-        : ShowNotification("No error log found.","info")
-    ))
-
-    ; Show dialog with scaled dimensions
-    GuiObj.Show("w" . dialogWidth . " h" . dialogHeight)
+    btnDiag.OnEvent("Click", (*) => Run('explorer.exe "' . DirSplit(logPath)[1] . '"'))
+    btnLog.OnEvent("Click", (*) => (FileExist(logPath) ? Run('notepad.exe "' . logPath . '"') : ShowNotification("No error log found.","info")))
+    
+    ApplyThemeToPrefsDialog(aboutGuiObj, IsObject(settings) && settings.Has("theme") ? settings.theme : "Light") 
+    aboutGuiObj.Show("w" . dialogWidth . " h" . dialogHeight)
 }
 
-; --- Other app/utility handlers ---
 ToggleGui() {
     global mainGui
-    if WinExist("ahk_id " . mainGui.Hwnd) {
+    if (mainGui.Visible) {
         mainGui.Hide()
     } else {
         mainGui.Show()
+        WinActivate("ahk_id " mainGui.Hwnd)
     }
 }
 ^!q:: ToggleGui()
 
 ResetGUI() {
-    global mainGui, progressBar, btnOpen, btnCancel, jobEdit
-    mainGui["StatusText"].Value := "Ready"
+    global mainGui, progressBar, btnOpen, btnCancel, jobEdit, statusText, jobErrorLabel, settings
+    statusText.Value := "Ready"
     progressBar.Value := 0
+    SetProgress(0) 
     btnOpen.Enabled := true
     btnCancel.Enabled := false
-    jobEdit.Opt("BackgroundWhite")
+    ApplyThemeToControl(jobEdit, IsObject(settings) && settings.Has("theme") ? settings.theme : "Light")
+    jobErrorLabel.Visible := false
+    ApplyTheme(IsObject(settings) && settings.Has("theme") ? settings.theme : "Light") 
 }
 
-; --- Reload folder list when favorites change ---
 ReloadFolderRadios() {
     global folderNames, radioValues, recentsData, defaultFolderNames, mainGui, folderListView
 
-    ; Rebuild folderNames from favorites
+    recentsData := LoadRecents() 
     folderNames := []
-    if (recentsData.favorites.Length) {
+    if (IsObject(recentsData) && recentsData.Has("favorites") && (TypeOf(recentsData.favorites) = "Array") && recentsData.favorites.Length) {
         for idx, fname in recentsData.favorites {
             v := ValidateAndNormalizeInputs("00000", fname)
             if v.valid
@@ -1000,36 +826,36 @@ ReloadFolderRadios() {
             folderNames.Push(fname)
     }
 
-    ; Clear ListView and radioValues
-    folderListView.Delete()
+    folderListView.Delete() 
     radioValues := []
 
-    ; Add folders to ListView
     Loop folderNames.Length {
         folderListView.Add("", folderNames[A_Index])
         radioValues.Push(false)
     }
 
-    ; Select first item
     if (folderNames.Length > 0) {
         folderListView.Modify(1, "Select Focus")
         radioValues[1] := true
+    } else {
+        ; Handle case where there are no folders (e.g. all favorites removed and no defaults)
+        ShowNotification("No subfolders available. Please check favorites or configuration.", "warning")
     }
 
-    ; Update notification panel position and redraw GUI
     UpdateNotificationPanelPosition()
     mainGui.Redraw()
-
     ShowNotification("Favorites updated.", "success", 2000)
 }
 
-; --- App entrypoint: initialize tray, show GUI ---
 AddSystemTrayMenu()
 mainGui.OnEvent("Close", GuiClose)
 
-; Position notification panel based on current radio buttons
-UpdateNotificationPanelPosition()
+if IsObject(settings) && settings.Has("theme") {
+    ApplyTheme(settings.theme)
+} else {
+    ApplyTheme("Light") 
+}
 
-; Show the main GUI
+UpdateNotificationPanelPosition() 
 mainGui.Show("w" . Scale(340) . " h" . Scale(380))
 return

@@ -3,13 +3,18 @@
 ## Current Focus
 
 All major components of Project QuickNav have been implemented:
+
 - Python backend for folder lookup
 - AutoHotkey GUI for user interaction
 - MCP server for AI/automation integration
 
-Current focus has shifted from development to stabilization, testing, and preparation for broader use.
+Current focus has shifted from development to stabilization and testing. Iterative testing of `lld_navigator.ahk` is underway.
+- Initial AHK runtime warnings (e.g., `A_IsDarkMode`, `this` variable usage in `ShowNotification`) have been addressed.
+- Some linter errors related to these warnings have been resolved.
+- Other linter issues persist, notably incorrect include path resolution for `lld_navigator_controller.ahk` by the linter and `test_fail` function conflicts in AHK test scripts.
+- The AHK script (`lld_navigator.ahk`) is not yet 100% working, and further debugging and refinement are required.
 
-A key area is the new AHK integration test suite, covering GUI/Python backend interaction. This suite supports robust validation of error handling, selection logic, and UI feedback.
+A key area remains the AHK integration test suite, covering GUI/Python backend interaction.
 
 ## Recent Changes
 
@@ -18,10 +23,14 @@ A key area is the new AHK integration test suite, covering GUI/Python backend in
 - Validated end-to-end operation for user and AI workflows.
 - Fixed issue with AHK script not starting the Python backend correctly by removing the initialization code and only running the backend when needed with the proper job number argument.
 - Implemented a dedicated AHK integration test suite (`tests/ahk/`), including a reusable test runner and utility module. All core backend error and selection logic flows now have automated coverage. The suite is CI-ready via an appropriate exit code and summary output.
+- Addressed `A_IsDarkMode` initialization and `this` variable usage warnings in `lld_navigator.ahk`.
+- Ongoing efforts to resolve linter errors in AHK scripts and iteratively test `lld_navigator.ahk` functionality.
 
 ## Potential Next Steps
 
-- **Comprehensive Testing:** Expand test coverage for various input cases, error handling, and integration points.
+- **AHK Debugging:** Continue to identify and fix remaining errors in `lld_navigator.ahk`.
+- **Linter Configuration/Resolution:** Investigate linter behavior for include path resolution and function conflicts if they impede development or hide real issues.
+- **Comprehensive Testing:** Expand test coverage for various input cases, error handling, and integration points once the main script stabilizes.
 - **Packaging & Distribution:** Prepare installation scripts or packages for easy deployment across multiple workstations.
 - **User Documentation:** Develop clear usage and troubleshooting guides.
 - **User Feedback:** Solicit feedback from target users to identify pain points or desired enhancements.
