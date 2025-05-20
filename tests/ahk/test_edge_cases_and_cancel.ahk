@@ -9,7 +9,8 @@ Covers:
 */
 
 #Requires AutoHotkey v2.0
-#Include %A_ScriptDir%\..\..\lld_navigator_controller.ahk
+; Include dependencies using relative paths without variables
+#Include ..\..\lld_navigator_controller.ahk
 #Include ..\..\lld_navigator.ahk
 #Include test_utils.ahk
 

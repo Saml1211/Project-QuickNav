@@ -1,0 +1,8 @@
+{
+  "AutoHotkey2.Include.Directories": [
+    "${workspaceFolder}"
+  ],
+  "AutoHotkey2.Diagnostics.ParamCount": "Hint",
+  "AutoHotkey2.Warn.LocalSameAsGlobal": false,
+  "AutoHotkey2.Diagnostics.Run": "Information"
+} 

@@ -33,7 +33,8 @@ QuickNav_ErrorHandler(err) {
 ; Set up error handling
 OnError(QuickNav_ErrorHandler)
 
-#Include %A_ScriptDir%\lld_navigator_controller.ahk ; Assumes controller is in the same dir
+; Include the controller script - use a direct relative path
+#Include lld_navigator_controller.ahk ; Controller script must be in the same directory
 
 ; Load settings early to apply theme and A_IsDarkMode
 settings := Controller_LoadSettings() ; Assuming this function exists in the controller

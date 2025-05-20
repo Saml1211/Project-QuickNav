@@ -29,7 +29,7 @@ AI / Automation ⇄ [MCP Server] ⇄ [Python Backend]
 ## Component Details
 
 ### Backend (`find_project_path.py`)
-- Implements folder search using Windows environment assumptions (OneDrive, “Project Folders”).
+- Implements folder search using Windows environment assumptions (OneDrive, "Project Folders").
 - Exits with status-prefixed lines (e.g. `SUCCESS:`, `ERROR:`, `SELECT:`).
 - Designed for robust command-line use and IPC.
 
@@ -125,3 +125,59 @@ AI / Automation ⇄ [MCP Server] ⇄ [Python Backend]
 - "Favorites" or search history
 - Deeper IDE/editor integrations
 - Advanced automation workflows
+
+---
+
+## AHK Linting and Best Practices
+
+### AutoHotkey Linting
+
+- **Include Directives:** 
+  - Always use simple relative paths for `#Include` directives:
+  ```ahk
+  ; Good - direct relative path
+  #Include lld_navigator_controller.ahk
+  
+  ; Good - explicit relative path for test scripts
+  #Include ..\..\lld_navigator.ahk
+  
+  ; Avoid - may cause linter path resolution issues
+  #Include %A_ScriptDir%\some_file.ahk
+  ```
+  
+- **Test Utilities:**
+  - Test scripts should use the shared utilities in `tests/ahk/test_utils.ahk`:
+  ```ahk
+  #Include test_utils.ahk
+  ; Reset test state at the beginning of each test
+  reset_test_state()
+  ```
+  - Never define duplicate test functions like `test_fail()` in individual test scripts. Use the ones provided by `test_utils.ahk`.
+
+- **Linter Configuration:**
+  - If using VS Code with the AutoHotkey extension:
+    1. Set workspace as the project root, not the `tests/ahk/` directory.
+    2. Configure the linter to correctly find include files by adding a `.vscode/settings.json` with:
+    ```json
+    {
+      "AutoHotkey2.Include.Directories": [
+        "${workspaceFolder}"
+      ]
+    }
+    ```
+
+- **Common Issues:**
+  - The linter may sometimes incorrectly report errors for include paths, especially when:
+    - The workspace root is not properly set.
+    - Environment-dependent paths like `%A_ScriptDir%` are used in includes.
+    - Multiple functions with the same name exist across included files.
+  - For test files, ensure all utility functions are imported from `test_utils.ahk` and not redefined locally.
+
+### AHK Code Organization
+
+- Each AHK script should have a clear separation of concerns:
+  - `lld_navigator.ahk`: GUI and presentation only; delegates business logic to controller.
+  - `lld_navigator_controller.ahk`: Core business/backend logic, persistence, validation.
+  - Test scripts: Individual tests with clear scope and purpose; shared logic in test utilities.
+
+---
