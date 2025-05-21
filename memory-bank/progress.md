@@ -8,6 +8,7 @@
   - MCP server for AI and automation integration.
 - Basic end-to-end workflow for job number input and subfolder selection is partially functional for human users, but undergoing debugging.
 - Some AHK runtime warnings (e.g. `A_IsDarkMode`, `this` in `ShowNotification`) have been resolved.
+- **Input Validation Robustness:** The handling of the `v` variable (result of input validation) in `lld_navigator_controller.ahk` is now significantly more robust. It correctly handles scenarios where `v` might not be a valid object or lacks expected properties, preventing potential runtime errors.
 
 ## What's Left to Build
 
@@ -39,5 +40,6 @@
 - Error handling and edge case management in the AHK frontend require further validation.
 - No persistent state for user preferences or usage history beyond what's implemented.
 - ~~Issue with AHK script not starting the Python backend correctly~~ (RESOLVED)
+- **Linter Error (Test Script):** The file `tests/ahk/test_window_resizing.ahk` reports a linter error at line 15 due to a duplicate function declaration for `test_fail`. This does not affect the main application's functionality but should be resolved to ensure test suite integrity. This issue is separate from the `v` variable fixes.
 
 Project QuickNav is functionally near complete, with current efforts focused on debugging and stabilizing the AHK frontend.

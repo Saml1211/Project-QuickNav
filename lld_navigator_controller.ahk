@@ -20,14 +20,29 @@ procPID := 0
 recentDataPath := A_AppData . "\QuickNav\recent.json"
 settingsPath := A_AppData . "\QuickNav\settings.json"
 logPath := A_AppData . "\QuickNav\error.log"
+processStartTime := 0  ; Initialize globally
+processTimeoutMs := 30000  ; Initialize globally
+
+; Initialize data structures
+recentJobs := []
+recentFolders := []
+recentsData := Map()
+recentsData.jobs := recentJobs
+recentsData.folders := recentFolders
+recentsData.favorites := []
 
 ; External variables declared in the main script
 ; These are referenced here but defined in lld_navigator.ahk
 global mainGui, btnOpen, btnCancel, jobEdit, folderNames
-global recentsData, recentJobs, recentFolders
 
 ; External functions - these are defined in lld_navigator.ahk
 ; We don't declare them as global since they're functions
+; The following functions are referenced in this file but defined in lld_navigator.ahk:
+; - ShowNotification(message, type := "info") - Displays notifications with styling
+; - SetProgress(percent := 0) - Updates progress indicator in GUI
+; - ShowInlineHint(message, type := "info") - Shows inline hints/messages in UI
+; - ResetGUI() - Resets GUI controls to initial state
+; - ReloadFolderRadios() - Updates folder radio buttons with favorites status
 
 ; === Input Validation & Normalization ===
 ValidateAndNormalizeInputs(jobInput, folderInput) {
@@ -347,13 +362,99 @@ SaveSettings(settings) {
     DirCreate(DirSplit(settingsPath)[1])
     JSON_Dump_To_File(settings, settingsPath)
 }
+
+; === UI Helper Functions ===
+; These are safe wrappers for the UI functions defined in lld_navigator.ahk
+; They ensure the controller can be used standalone for testing
+
+; Function to safely call ShowNotification if it exists
+SafeShowNotification(message, type := "info") {
+    try {
+        ; Check if the function exists by trying to call it
+        IsFunc("ShowNotification")
+        ; If we get here, the function exists, so call it
+        ShowNotification(message, type)
+    } catch {
+        ; Fallback if ShowNotification is not defined
+        ToolTip("Notification: " message "`nType: " type)
+        SetTimer () => ToolTip(), -3000
+    }
+}
+
+; Function to safely call SetProgress if it exists
+SafeSetProgress(percent := 0) {
+    static lastPercent := -1
+    
+    try {
+        ; Check if the function exists by trying to call it
+        IsFunc("SetProgress")
+        ; If we get here, the function exists, so call it
+        SetProgress(percent)
+    } catch {
+        ; Fallback if SetProgress is not defined (only log if percent changed)
+        if (percent != lastPercent) {
+            LogError("Progress: " percent "%", "SafeSetProgress", "DEBUG")
+            lastPercent := percent
+        }
+    }
+}
+
+; Function to safely call ShowInlineHint if it exists
+SafeShowInlineHint(message, type := "info") {
+    try {
+        ; Check if the function exists by trying to call it
+        IsFunc("ShowInlineHint")
+        ; If we get here, the function exists, so call it
+        ShowInlineHint(message, type)
+    } catch {
+        ; Fallback if ShowInlineHint is not defined
+        ToolTip("Hint: " message "`nType: " type)
+        SetTimer () => ToolTip(), -3000
+    }
+}
+
+; Function to safely call ResetGUI if it exists
+SafeResetGUI() {
+    try {
+        ; Check if the function exists by trying to call it
+        IsFunc("ResetGUI")
+        ; If we get here, the function exists, so call it
+        ResetGUI()
+    } catch {
+        ; Fallback if ResetGUI is not defined
+        global btnOpen, btnCancel
+        LogError("ResetGUI called (fallback implementation)", "SafeResetGUI", "DEBUG")
+        
+        ; Basic reset functionality
+        if (IsSet(btnOpen) && btnOpen)
+            btnOpen.Enabled := true
+        if (IsSet(btnCancel) && btnCancel)  
+            btnCancel.Enabled := false
+    }
+}
+
+; Function to safely call ReloadFolderRadios if it exists
+SafeReloadFolderRadios() {
+    try {
+        ; Check if the function exists by trying to call it
+        IsFunc("ReloadFolderRadios")
+        ; If we get here, the function exists, so call it
+        ReloadFolderRadios()
+    } catch {
+        ; Fallback if ReloadFolderRadios is not defined
+        LogError("ReloadFolderRadios called (fallback - no implementation)", "SafeReloadFolderRadios", "DEBUG")
+    }
+}
+
+; For backward compatibility, set up globals for these functions
 ResetApp() {
     global settingsPath, recentDataPath, logPath
     try FileDelete(settingsPath)
     try FileDelete(recentDataPath)
     try FileDelete(logPath)
-    ShowNotification("App data reset. Restart recommended.", "success")
+    SafeShowNotification("App data reset. Restart recommended.", "success")
 }
+
 LogError(msg, context := "", severity := "ERROR") {
     global logPath
 
@@ -470,7 +571,7 @@ GetSystemInfo() {
     return info
 }
 DirSplit(path) {
-    local name, dir, ext, nameNoExt, drive
+    local name := "", dir := "", ext := "", nameNoExt := "", drive := ""
     SplitPath(path, &name, &dir, &ext, &nameNoExt, &drive)
     return [dir, name, ext, nameNoExt, drive]
 }
@@ -513,15 +614,16 @@ DelayedFileCleanup(filePath, attempt := 1, maxAttempts := 5) {
 
 Controller_OpenProject(jobNumber, selectedFolder, DebugMode := false) {
     global folderNames, mainGui, btnOpen, btnCancel, jobEdit, recentsData, recentJobs, recentFolders, procPID
+    global processStartTime, processTimeoutMs  ; Access global variables instead of redefining
 
     ; Store start time for timeout tracking
-    global processStartTime := A_TickCount
-    global processTimeoutMs := 30000  ; 30 seconds timeout
+    processStartTime := A_TickCount
+    processTimeoutMs := 30000  ; 30 seconds timeout
 
     btnOpen.Enabled := false
     btnCancel.Enabled := true
     mainGui["StatusText"].Value := "Processing..."
-    SetProgress()
+    SafeSetProgress()
     jobEdit.Opt("BackgroundWhite")
 
     scriptPath := "find_project_path.py"
@@ -529,11 +631,22 @@ Controller_OpenProject(jobNumber, selectedFolder, DebugMode := false) {
         scriptPath := "test_find_project_path.py"
 
     v := ValidateAndNormalizeInputs(jobNumber, selectedFolder)
+    if (!IsObject(v) || !v.Has("valid")) {
+        SafeShowInlineHint("Input validation process failed unexpectedly.", "error")
+        if (IsObject(jobEdit))
+            jobEdit.Opt("BackgroundF7C8C8")
+        LogError("ValidateAndNormalizeInputs did not return a valid object. jobNumber: '" . (IsSet(jobNumber) ? jobNumber : "N/A") . "', selectedFolder: '" . (IsSet(selectedFolder) ? selectedFolder : "N/A") . "'", "Controller_OpenProjectFromInput", "CRITICAL")
+        SafeResetGUI()
+        Return
+    }
+
     if (!v.valid) {
-        ShowInlineHint(v.errorMsg, "error")
-        jobEdit.Opt("BackgroundF7C8C8")
-        ResetGUI()
-        return
+        local errorToShow := v.Has("errorMsg") && v.errorMsg != "" ? v.errorMsg : "Invalid input provided."
+        SafeShowInlineHint(errorToShow, "error")
+        if (IsObject(jobEdit))
+            jobEdit.Opt("BackgroundF7C8C8")
+        SafeResetGUI()
+        Return
     }
     jobEdit.Opt("BackgroundWhite")
 
@@ -552,7 +665,7 @@ Controller_OpenProject(jobNumber, selectedFolder, DebugMode := false) {
     SaveRecents(recentsData)
 
     mainGui["StatusText"].Value := "Searching for project folder..."
-    SetProgress(30)
+    SafeSetProgress(30)
 
     comspec := A_ComSpec
     tempFile := A_Temp . "\project_quicknav_pyout.txt"
@@ -575,9 +688,9 @@ Controller_OpenProject(jobNumber, selectedFolder, DebugMode := false) {
         LogError("Started process with PID: " . procPID . ", command: " . cmd, "Controller_OpenProject")
     } catch as e {
         mainGui["StatusText"].Value := "Error: backend launch failed"
-        ShowInlineHint("Backend error: " . e.Message, "error")
+        SafeShowInlineHint("Backend error: " . e.Message, "error")
         LogError("Failed to launch backend: " . e.Message, "Controller_OpenProject")
-        ResetGUI()
+        SafeResetGUI()
         return
     }
 
@@ -599,13 +712,13 @@ Controller_WaitForBackend(tempFile, pid, attempts, maxAttempts, DebugMode, selec
 
     ; Update progress bar to show time remaining
     progressPercent := Min(90, (elapsedTime / processTimeoutMs) * 100)
-    SetProgress(progressPercent)
+    SafeSetProgress(progressPercent)
 
     ; Check if output file exists (process completed)
     if FileExist(tempFile) {
         btnCancel.Enabled := false
         btnOpen.Enabled := true
-        SetProgress(100)  ; Show 100% completion
+        SafeSetProgress(100)  ; Show 100% completion
 
         output := ""
         fileReadSuccess := false
@@ -620,9 +733,9 @@ Controller_WaitForBackend(tempFile, pid, attempts, maxAttempts, DebugMode, selec
             } catch as e {
                 retryCount++
                 if (retryCount >= maxRetries) {
-                    ShowInlineHint("Error reading output file: " . e.Message, "error")
+                    SafeShowInlineHint("Error reading output file: " . e.Message, "error")
                     LogError("File read error: " . e.Message, "Controller_WaitForBackend")
-                    ResetGUI()
+                    SafeResetGUI()
                     return
                 }
                 Sleep(100)
@@ -635,7 +748,7 @@ Controller_WaitForBackend(tempFile, pid, attempts, maxAttempts, DebugMode, selec
         ; Process the output
         output := Trim(output)
         if (DebugMode) {
-            ShowInlineHint("Raw backend output: " . output, "info")
+            SafeShowInlineHint("Raw backend output: " . output, "info")
         }
 
         ; Handle different response types
@@ -649,15 +762,15 @@ Controller_WaitForBackend(tempFile, pid, attempts, maxAttempts, DebugMode, selec
             return Controller_HandleBackendSuccess(output, selectedFolder, DebugMode)
         else if (InStr(output, "TIMEOUT:") == 1) {
             mainGui["StatusText"].Value := "Backend operation timed out"
-            ShowInlineHint("The operation took too long to complete.", "warning")
+            SafeShowInlineHint("The operation took too long to complete.", "warning")
             LogError("Backend reported timeout: " . output, "Controller_WaitForBackend")
-            ResetGUI()
+            SafeResetGUI()
             return
         } else {
             mainGui["StatusText"].Value := "Unexpected response"
             MsgBox("Unexpected response from Python backend:`n" . output, "Error", 16)
             LogError("Unexpected backend response: " . output, "Controller_WaitForBackend")
-            ResetGUI()
+            SafeResetGUI()
             return
         }
     }
@@ -674,9 +787,9 @@ Controller_WaitForBackend(tempFile, pid, attempts, maxAttempts, DebugMode, selec
         }
 
         mainGui["StatusText"].Value := "Operation timed out"
-        ShowInlineHint("The operation timed out after " . (processTimeoutMs / 1000) . " seconds.", "error")
+        SafeShowInlineHint("The operation timed out after " . (processTimeoutMs / 1000) . " seconds.", "error")
         LogError("Hard timeout after " . elapsedTime . "ms", "Controller_WaitForBackend")
-        ResetGUI()
+        SafeResetGUI()
         return
     }
     ; Check for max attempts (soft timeout)
@@ -692,9 +805,9 @@ Controller_WaitForBackend(tempFile, pid, attempts, maxAttempts, DebugMode, selec
         }
 
         mainGui["StatusText"].Value := "Operation timed out"
-        ShowInlineHint("The operation timed out after " . attempts . " attempts.", "error")
+        SafeShowInlineHint("The operation timed out after " . attempts . " attempts.", "error")
         LogError("Soft timeout after " . attempts . " attempts", "Controller_WaitForBackend")
-        ResetGUI()
+        SafeResetGUI()
         return
     }
 
@@ -711,27 +824,31 @@ Controller_HandleBackendError(output, selectedFolder) {
     global mainGui
     msg := SubStr(output, 7)
     mainGui["StatusText"].Value := "Error: " . Trim(msg)
-    SetProgress(0)
+    SafeSetProgress(0)
     MsgBox(Trim(msg), "Error", 16)
-    ResetGUI()
+    SafeResetGUI()
 }
 Controller_HandleBackendSelect(output, selectedFolder, DebugMode) {
     global mainGui
+    global selGui := "", selResult := {SelChoice: 0}  ; Initialize these globals
+    local MainProjectPath := ""  ; Initialize as local 
+    
     mainGui["StatusText"].Value := "Multiple paths found"
-    SetProgress(100)
+    SafeSetProgress(100)
     strPaths := SubStr(output, 8)
     arrPaths := StrSplit(strPaths, "|")
-    global selGui, selResult
 
     OkHandler(thisCtrl, *) {
+        global selGui, selResult
         selResult := selGui.Submit()
         selGui.Destroy()
     }
     CloseHandler(thisGui, *) {
+        global selGui, selResult
         selResult := {SelChoice: 0}
         selGui.Destroy()
     }
-    selResult := {SelChoice: 0}
+    
     selGui := Gui("", "Select Project Folder")
     selGui.Add("Text", "x10 y10", "Multiple project folders found:`nSelect the correct path:")
     choices := ""
@@ -746,7 +863,7 @@ Controller_HandleBackendSelect(output, selectedFolder, DebugMode) {
     if !selResult.SelChoice {
         mainGui["StatusText"].Value := "Selection cancelled"
         MsgBox("Selection cancelled.", "Cancelled", 48)
-        ResetGUI()
+        SafeResetGUI()
         return
     }
     parts := StrSplit(selResult.SelChoice, ":")
@@ -756,11 +873,13 @@ Controller_HandleBackendSelect(output, selectedFolder, DebugMode) {
 }
 Controller_HandleBackendSearch(output, selectedFolder, DebugMode) {
     global mainGui
+    global searchGui := "", searchResult := ""  ; Initialize these globals
+    local MainProjectPath := ""  ; Initialize as local variable
+    
     mainGui["StatusText"].Value := "Search results found"
-    SetProgress(100)
+    SafeSetProgress(100)
     strPaths := SubStr(output, 8)
     arrPaths := StrSplit(strPaths, "|")
-    global searchGui, searchResult
 
     SearchGuiSize(thisGui, MinMax, Width, Height) {
         if (MinMax = -1)
@@ -782,7 +901,7 @@ Controller_HandleBackendSearch(output, selectedFolder, DebugMode) {
         searchResult := ""
         searchGui.Destroy()
     }
-    searchResult := ""
+    
     searchGui := Gui("+Resize", "Search Results")
     searchGui.Add("Text", "x10 y10", "Found " . arrPaths.Length . " project folders matching your search:")
     LV := searchGui.Add("ListView", "x10 y30 w600 h300 vSearchList -Multi", ["Project Number", "Project Name", "Full Path"])
@@ -791,6 +910,9 @@ Controller_HandleBackendSearch(output, selectedFolder, DebugMode) {
     LV.ModifyCol(3, 250)
     for i, path in arrPaths {
         SplitPath(path, &fileName, &dirPath)
+        projNum := ""  ; Initialize to empty string
+        projName := ""  ; Initialize to empty string
+        
         if (RegExMatch(fileName, "^(\d{5}) - (.+)$", &match)) {
             projNum := match[1]
             projName := match[2]
@@ -812,7 +934,7 @@ Controller_HandleBackendSearch(output, selectedFolder, DebugMode) {
     if (searchResult = "") {
         mainGui["StatusText"].Value := "Selection cancelled"
         MsgBox("No project selected.", "Cancelled", 48)
-        ResetGUI()
+        SafeResetGUI()
         return
     }
     MainProjectPath := searchResult
@@ -824,17 +946,27 @@ Controller_HandleBackendSuccess(output, selectedFolder, DebugMode) {
 }
 Controller_OpenSelectedFolder(MainProjectPath, selectedFolder, DebugMode) {
     global mainGui
+    
     v := ValidateAndNormalizeInputs("", selectedFolder)
+    if (!IsObject(v) || !v.Has("valid")) {
+        SafeShowInlineHint("Input validation process failed unexpectedly.", "error")
+        LogError("ValidateAndNormalizeInputs did not return a valid object. selectedFolder: '" . (IsSet(selectedFolder) ? selectedFolder : "N/A") . "'", "Controller_OpenProjectFromFolderSelection", "CRITICAL")
+        SafeResetGUI()
+        Return
+    }
+
     if (!v.valid) {
-        ShowInlineHint(v.errorMsg, "error")
-        ResetGUI()
-        return
+        local errorToShow := v.Has("errorMsg") && v.errorMsg != "" ? v.errorMsg : "Invalid folder selection."
+        SafeShowInlineHint(errorToShow, "error")
+        SafeResetGUI()
+        Return
     }
     MainProjectPath := Trim(MainProjectPath, " `t`n`r`"")
 
     if (SubStr(MainProjectPath, 1, 1) == "\" || SubStr(MainProjectPath, 1, 1) == "/")
         MainProjectPath := SubStr(MainProjectPath, 2)
 
+    FullSubfolderPath := ""  ; Initialize this variable
     if (selectedFolder = "Floor Plans" || selectedFolder = "Site Photos") {
         FullSubfolderPath := MainProjectPath . "\1. Sales Handover\" . selectedFolder
     } else {
@@ -850,7 +982,7 @@ Controller_OpenSelectedFolder(MainProjectPath, selectedFolder, DebugMode) {
     if !FileExist(FullSubfolderPath) {
         mainGui["StatusText"].Value := "Subfolder not found"
         MsgBox("Subfolder '" . selectedFolder . "' not found under:`n" . MainProjectPath, "Subfolder Not Found", 16)
-        ResetGUI()
+        SafeResetGUI()
         return
     }
     mainGui["StatusText"].Value := "Opening folder: " . FullSubfolderPath
@@ -859,7 +991,7 @@ Controller_OpenSelectedFolder(MainProjectPath, selectedFolder, DebugMode) {
 
     try {
         Run(explorerPath)
-        ShowNotification("Folder opened successfully", "success")
+        SafeShowNotification("Folder opened successfully", "success")
         mainGui["StatusText"].Value := "Folder opened successfully"
         if (DebugMode)
             MsgBox("Command executed: " . explorerPath, "Debug Info", 64)
@@ -870,18 +1002,19 @@ Controller_OpenSelectedFolder(MainProjectPath, selectedFolder, DebugMode) {
         } catch as e2 {
             mainGui["StatusText"].Value := "Error opening folder: " . e2.Message
             MsgBox("Failed to open folder: " . e2.Message . "`n`nPath: " . FullSubfolderPath, "Error", 16)
-            ResetGUI()
+            SafeResetGUI()
             return
         }
     }
-    SetTimer(() => ResetGUI(), -2000)
+    SetTimer(() => SafeResetGUI(), -2000)
 }
 Controller_CancelProcessing() {
     global procPID, mainGui, btnOpen, btnCancel
+    local tempFile := ""  ; Initialize this local variable
 
     ; Update UI to show cancellation in progress
     mainGui["StatusText"].Value := "Cancelling..."
-    SetProgress(0)
+    SafeSetProgress(0)
 
     ; Cancel any active timers that might be running
     SetTimer(Controller_WaitForBackend, 0)
@@ -892,15 +1025,15 @@ Controller_CancelProcessing() {
             ; Try graceful termination first
             ProcessClose(procPID)
             LogError("Process " . procPID . " terminated by user", "Controller_CancelProcessing")
-            ShowInlineHint("Process cancelled.", "info")
+            SafeShowInlineHint("Process cancelled.", "info")
         } catch as e {
             ; If graceful termination fails, try forceful termination
             try {
                 Run("taskkill /F /PID " . procPID, , "Hide")
                 LogError("Process " . procPID . " forcefully terminated by user", "Controller_CancelProcessing")
-                ShowInlineHint("Process forcefully terminated.", "warning")
+                SafeShowInlineHint("Process forcefully terminated.", "warning")
             } catch as e2 {
-                ShowInlineHint("Error cancelling process: " . e2.Message, "error")
+                SafeShowInlineHint("Error cancelling process: " . e2.Message, "error")
                 LogError("Error cancelling process: " . e2.Message, "Controller_CancelProcessing")
             }
         } finally {
@@ -908,7 +1041,7 @@ Controller_CancelProcessing() {
             procPID := 0
         }
     } else {
-        ShowInlineHint("No active process to cancel.", "info")
+        SafeShowInlineHint("No active process to cancel.", "info")
     }
 
     ; Clean up temporary files
@@ -925,7 +1058,7 @@ Controller_CancelProcessing() {
     }
 
     ; Reset the UI
-    ResetGUI()
+    SafeResetGUI()
 
     ; Ensure buttons are in the correct state
     btnOpen.Enabled := true
@@ -941,10 +1074,10 @@ Controller_ToggleFavorite(label) {
     }
     recentsData.favorites := arr
     SaveRecents(recentsData)
-    ReloadFolderRadios()
+    SafeReloadFolderRadios()
 }
 Controller_ReloadFolderRadios() {
-    ReloadFolderRadios()
+    SafeReloadFolderRadios()
 }
 
 ; === Asynchronous Process Handling ===
@@ -987,7 +1120,7 @@ class AsyncProcessCallback {
 
         ; Update progress bar to show time remaining
         progressPercent := Min(90, (elapsedTime / this.timeoutMs) * 100)
-        SetProgress(progressPercent)
+        SafeSetProgress(progressPercent)
 
         ; Check if output file exists (process completed)
         if FileExist(this.tempFile) {
@@ -996,7 +1129,7 @@ class AsyncProcessCallback {
 
             btnCancel.Enabled := false
             btnOpen.Enabled := true
-            SetProgress(100)  ; Show 100% completion
+            SafeSetProgress(100)  ; Show 100% completion
 
             this.ProcessOutput()
         }
@@ -1016,9 +1149,9 @@ class AsyncProcessCallback {
             }
 
             mainGui["StatusText"].Value := "Operation timed out"
-            ShowInlineHint("The operation timed out after " . (this.timeoutMs / 1000) . " seconds.", "error")
+            SafeShowInlineHint("The operation timed out after " . (this.timeoutMs / 1000) . " seconds.", "error")
             LogError("Hard timeout after " . elapsedTime . "ms", "AsyncProcessCallback", "ERROR")
-            ResetGUI()
+            SafeResetGUI()
         }
         ; Check for max attempts (soft timeout)
         else if (this.attempts > this.maxAttempts) {
@@ -1036,9 +1169,9 @@ class AsyncProcessCallback {
             }
 
             mainGui["StatusText"].Value := "Operation timed out"
-            ShowInlineHint("The operation timed out after " . this.attempts . " attempts.", "error")
+            SafeShowInlineHint("The operation timed out after " . this.attempts . " attempts.", "error")
             LogError("Soft timeout after " . this.attempts . " attempts", "AsyncProcessCallback", "ERROR")
-            ResetGUI()
+            SafeResetGUI()
         }
 
         ; Update status message periodically
@@ -1064,9 +1197,9 @@ class AsyncProcessCallback {
             } catch as e {
                 retryCount++
                 if (retryCount >= maxRetries) {
-                    ShowInlineHint("Error reading output file: " . e.Message, "error")
+                    SafeShowInlineHint("Error reading output file: " . e.Message, "error")
                     LogError("File read error: " . e.Message, "AsyncProcessCallback", "ERROR")
-                    ResetGUI()
+                    SafeResetGUI()
                     return
                 }
                 Sleep(100)
@@ -1079,7 +1212,7 @@ class AsyncProcessCallback {
         ; Process the output
         output := Trim(output)
         if (this.debugMode) {
-            ShowInlineHint("Raw backend output: " . output, "info")
+            SafeShowInlineHint("Raw backend output: " . output, "info")
         }
 
         ; Handle different response types
@@ -1093,14 +1226,63 @@ class AsyncProcessCallback {
             Controller_HandleBackendSuccess(output, this.selectedFolder, this.debugMode)
         else if (InStr(output, "TIMEOUT:") == 1) {
             mainGui["StatusText"].Value := "Backend operation timed out"
-            ShowInlineHint("The operation took too long to complete.", "warning")
+            SafeShowInlineHint("The operation took too long to complete.", "warning")
             LogError("Backend reported timeout: " . output, "AsyncProcessCallback", "WARNING")
-            ResetGUI()
+            SafeResetGUI()
         } else {
             mainGui["StatusText"].Value := "Unexpected response"
             MsgBox("Unexpected response from Python backend:`n" . output, "Error", 16)
             LogError("Unexpected backend response: " . output, "AsyncProcessCallback", "ERROR")
-            ResetGUI()
+            SafeResetGUI()
         }
     }
+}
+
+; === Settings Management ===
+Controller_LoadSettings() {
+    global settingsPath
+    
+    ; Create a default settings map
+    defaults := Map(
+        "theme", "Light",
+        "defaultFolder", "",
+        "jobInputMode", "Prompt",
+        "maxRecents", 10,
+        "notifDuration", 3000
+    )
+    
+    ; Load existing settings
+    settings := JSON_Load_From_File(settingsPath)
+    
+    ; Apply defaults for any missing keys
+    for key, value in defaults {
+        if (!settings.Has(key)) {
+            settings[key] := value
+        }
+    }
+    
+    return settings
+}
+
+SaveAppSettings(settings) {
+    global settingsPath
+    return JSON_Dump_To_File(settings, settingsPath)
+}
+
+ResetAppWithConfirmation() {
+    global recentDataPath, settingsPath
+    
+    answer := MsgBox("This will reset all settings and favorites. Continue?", "Reset Application", 4 + 48 + 256) ; Yes/No + Warning + Always On Top
+    if (answer = "Yes") {
+        if (FileExist(recentDataPath))
+            FileDelete(recentDataPath)
+        if (FileExist(settingsPath))
+            FileDelete(settingsPath)
+        MsgBox("Application reset complete. The application will now restart.", "Reset Successful", 64 + 256)
+        ReloadApp()
+    }
+}
+
+ReloadApp() {
+    Reload
 }

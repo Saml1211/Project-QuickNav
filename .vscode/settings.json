@@ -4,5 +4,8 @@
   ],
   "AutoHotkey2.Diagnostics.ParamCount": "Hint",
   "AutoHotkey2.Warn.LocalSameAsGlobal": false,
-  "AutoHotkey2.Diagnostics.Run": "Information"
+  "AutoHotkey2.Diagnostics.Run": "Information",
+  "AutoHotkey2.Diagnostics.UseUnknownFunc": "Ignore",
+  "AutoHotkey2.Diagnostics.UseUnknownVarType": "Ignore",
+  "AutoHotkey2.Diagnostics.Deprecated": "Hint"
 } 

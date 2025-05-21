@@ -343,9 +343,9 @@ ShowPreferencesDialog() {
     btnCancel := prefGui.Add("Button", "x" . Scale(120) . " y" . yPos . " w" . Scale(80), "Cancel")
     btnReset := prefGui.Add("Button", "x" . Scale(210) . " y" . yPos . " w" . Scale(80), "Reset App")
 
-    btnSave.OnEvent("Click", HandleSavePreferences.Bind(prefGui)) ; Pass prefGui to destroy it
+    btnSave.OnEvent("Click", Bind(HandleSavePreferences, prefGui))
     btnCancel.OnEvent("Click", (*) => prefGui.Destroy())
-    btnReset.OnEvent("Click", (*) => (ResetApp(), prefGui.Destroy()))
+    btnReset.OnEvent("Click", (*) => (ResetAppWithConfirmation(), prefGui.Destroy()))
 
     ApplyThemeToPrefsDialog(prefGui, currentSettings.Has("theme") ? currentSettings["theme"] : "Light")
     prefGui.Show("w" . Scale(310) . " h" . Scale(yPos + 40))
@@ -361,7 +361,7 @@ HandleSavePreferences(prefGuiBound, *) { ; prefGuiBound is the GUI object passed
     newSettings["maxRecents"] := Integer(prefControlsMap["maxRecents"].Text)
     newSettings["notifDuration"] := Integer(prefControlsMap["notifDuration"].Text)
     
-    SaveSettings(newSettings)
+    SaveAppSettings(newSettings)
     settings := newSettings ; Update global settings cache
     A_IsDarkMode := (settings.Has("theme") && settings.theme == "Dark")
     ApplyTheme(settings["theme"])

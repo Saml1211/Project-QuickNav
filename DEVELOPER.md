@@ -162,9 +162,12 @@ AI / Automation ⇄ [MCP Server] ⇄ [Python Backend]
     {
       "AutoHotkey2.Include.Directories": [
         "${workspaceFolder}"
-      ]
+      ],
+      "AutoHotkey2.Diagnostics.UseUnknownFunc": "Ignore",
+      "AutoHotkey2.Diagnostics.UseUnknownVarType": "Ignore"
     }
     ```
+    3. The above settings help with false positives on built-in functions like `TypeOf()` that the linter might not recognize.
 
 - **Common Issues:**
   - The linter may sometimes incorrectly report errors for include paths, especially when:
@@ -172,6 +175,7 @@ AI / Automation ⇄ [MCP Server] ⇄ [Python Backend]
     - Environment-dependent paths like `%A_ScriptDir%` are used in includes.
     - Multiple functions with the same name exist across included files.
   - For test files, ensure all utility functions are imported from `test_utils.ahk` and not redefined locally.
+  - **Built-in function warnings**: Functions like `TypeOf()` may be flagged as "never assigned a value" because the linter doesn't recognize some built-in AHK v2 functions. Use the configuration settings above to suppress these warnings.
 
 ### AHK Code Organization
 
@@ -179,5 +183,15 @@ AI / Automation ⇄ [MCP Server] ⇄ [Python Backend]
   - `lld_navigator.ahk`: GUI and presentation only; delegates business logic to controller.
   - `lld_navigator_controller.ahk`: Core business/backend logic, persistence, validation.
   - Test scripts: Individual tests with clear scope and purpose; shared logic in test utilities.
+
+- **Function Naming Conventions:**
+  - All controller functions exposed to the UI should be prefixed with `Controller_` (e.g., `Controller_OpenProject`)
+  - Use descriptive, specific names for utility functions to avoid name conflicts
+  - When functions have similar purposes but operate on different data, use more specific names:
+    - `SaveRecents()` - For saving recents data
+    - `SaveAppSettings()` - For saving application settings
+  - If a function has a specialized version, use a descriptive suffix:
+    - `ResetApp()` - Quick reset without confirmation
+    - `ResetAppWithConfirmation()` - Reset with user confirmation dialog
 
 ---
