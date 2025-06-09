@@ -1,0 +1,281 @@
+--- STAGE 2 ERROR ---
+
+
+            if scope_type_match:
+                scope_summary_detail = f"Scope document detailing the {scope_type_match.group(1).strip()} solution"
+            else:
+                clean_name = re.sub(r'\.(pdf|rtf|docx)$',```json
+{
+  "optimized_training_data": [
+    {
+      "project_id": "17741",
+      "project_name": "QPS MTR RM Upgrades - Bulk Order",
+      "document_type": "System Line Drawing",
+      "document_path": "C:\\Users\\SamLyndon\\OneDrive - Pro AV Solutions\\Project Files\\Project Folders\\17000 - 17999\\17741 - QPS  MTR RM Upgrades - Bulk Order\\1. Sales Handover\\System Line Drawings.pdf",
+      "document_name": "System Line Drawings.pdf",
+      "scope_summary": "System line drawings for the 'QPS MTR RM Upgrades - Bulk Order' project."
+    },
+    {
+      "project_id": "17741",
+      "project_name": "QPS M
+
+--- STAGE 2 ERROR ---
+
+0 AS-BUILT) for QPS MTR RM Upgrades - Bulk Order project."
+This looks good. It's concise and informative.
+
+For `document_name`: "17741 - ROOM 1 - Townsville Academy Lenovo Core Medium Room Solution #01.docx```json
+{
+  "optimized_training_data": [
+    {
+      "project_id": "17741",
+      "project_name": "QPS MTR RM Upgrades - Bulk Order",
+      "document_type": "Scope Document",
+      "document_path": "C:\\Users\\SamLyndon\\OneDrive - Pro AV Solutions\\Project Files\\Project Folders\\17000 - 17999\\17741 - QPS  MTR RM Upgrades - Bulk Order\\1. Sales Handover\\Scopes\\Logitech Trolley Scope.rtf",
+      "document_name": "Logitech Trolley Scope.rtf",
+      "scope_summary": "Sales handover scope document for Logitech Trolley solution for QPS MTR RM Upgrades - Bulk Order project."
+    },
+    {
+      "project_id": "17741",
+
+
+--- STAGE 2 ERROR ---
+
+```python
+import re
+
+def parse_project_folder(folder_name):
+    """
+    Extracts project_id and project_name from the project_folder string.
+    """
+    match = re.match(r'(\d+) - (.*)', folder_name)
+    if match:
+        project_id = match.group(1)
+        project_name = match.group(2).strip()
+        return project_id, project_name
+    return None, folder_name # Fallback if pattern doesn't match
+
+def get_document_details(doc):
+    """
+    Determines document_type and generates scope_summary based on document details.
+    """
+    doc_path = doc['document_path']
+    doc_name = doc['document_name']
+    project_folder = doc['project_folder']
+
+    project_id, project_name = parse_project_folder(project_folder)
+
+    document_type = "General Project Document"
+
+--- STAGE 2 ERROR ---
+
+
+import re
+import os
+
+def parse_project_folder(project_folder):
+    match = re.match(r"(\d+) - (.*)", project_folder)
+    if match:
+        return match.group(1```python
+import re
+
+def parse_project_folder(project_folder):
+    """
+    Parses the project folder string to extract project ID and project name.
+    Assumes format: "ID - Name"
+    """
+    match = re.match(r"(\d+) - (.*)", project_folder)
+    if match:
+        return match.group(1), match.group(2).strip()
+    return None, project_folder # Fallback if pattern doesn't match
+
+def get_document_type(document_name, document_path):
+    """
+    Determines the document type based on keywords in document name and path.
+    """
+    name_lower = document_name.lower()
+    path_lower = document_path.lower()
+
+    if "as-built" in name_lower or "as built" in name_lower:
+        if "system designs" in path_
+
+--- STAGE 2 ERROR ---
+```json
+{
+  "optimized_training_data": [
+    {
+      "project_id": "20778",
+      "project_name": "PROAV-SA - DHA - Townsville Relocation Project",
+      "document_type": "Sales & PO Report",
+      "document_path": "C:\\Users\\SamLyndon\\OneDrive - Pro AV Solutions\\Project Files\\Project Folders\\20000 - 20999\\20778 - PROAV-SA - DHA - Townsville Relocation Project\\2. BOM & Orders\\Sales & Change Orders\\20778 - DHA - Townsville Relocation Project - Sales & PO Report 18.10.2024.pdf",
+      "document_name": "20778 - DHA - Townsville Relocation Project - Sales & PO Report 18.10.2024.pdf",
+      "scope_summary": "Sales and Purchase Order report for PROAV-SA - DHA - Townsville Relocation Project, dated 18.10.2024."
+    },
+    {
+      "project_id": "20778",
+      "project_name": "PROAV-SA - DHA - Townsville Relocation Project",
+      "document_type": "Sales & PO Report",
+      "document_path": "C:\\Users\\SamLyndon\\OneDrive - Pro AV Solutions\\Project Files\\Project Folders\\20000 - 20999\\20778 - PROAV-SA - DHA - Townsville Relocation Project\\2. BOM & Orders\\Sales & Change Orders\\20778 - DHA - Townsville Relocation Project - Sales & PO Report 31.07.2024.pdf",
+      "document_name": "20778 - DHA - Townsville Relocation Project - Sales & PO Report 31.07.2024.pdf",
+      "scope_summary": "Sales and Purchase Order report for PROAV-SA - DHA - Townsville Relocation Project, dated 31.07.2024."
+    },
+    {
+      "project_id": "20778",
+      "project_name": "PROAV-SA - DHA - Townsville Relocation Project",
+      "document_type": "System Design",
+      "document_path": "C:\\Users\\SamLyndon\\OneDrive - Pro AV Solutions\\Project Files\\Project Folders\\20000 - 20999\\20778 - PROAV-SA - DHA - Townsville Relocation Project\\4. System Designs\\20778 - DHA TOWNSVILLE RELOCATION PROJECT - Rev 106.pdf",
+      "document_name": "20778 - DHA TOWNSVILLE RELOCATION PROJECT - Rev 106.pdf",
+      "scope_summary": "System design document for PROAV-SA - DHA - Townsville Relocation Project, Revision 106."
+    },
+    {
+      "project_id": "20778",
+      "project_name": "PROAV-SA - DHA - Townsville Relocation Project",
+      "document_type": "As-Built System Design",
+      "document_path": "C:\\Users\\SamLyndon\\OneDrive - Pro AV Solutions\\Project Files\\Project Folders\\20000 - 20999\\20778 - PROAV-SA - DHA - Townsville Relocation Project\\4. System Designs\\20778 - DHA TOWNSVILLE RELOCATION PROJECT - Rev 107 As Built.pdf",
+      "document_name": "20778 - DHA TOWNSVILLE RELOCATION PROJECT - Rev 107 As Built.pdf",
+      "scope_summary": "As-built system design document for PROAV-SA - DHA - Townsville Relocation Project, Revision 107."
+    },
+    {
+      "project_id": "20778",
+      "project_name": "PROAV-SA - DHA - Townsville Relocation Project",
+      "document_type": "System Design",
+      "document_path": "C:\\Users\\SamLyndon\\OneDrive - Pro AV Solutions\\Project Files\\Project Folders\\20000 - 20999\\20778 - PROAV-SA - DHA - Townsville Relocation Project\\4. System Designs\\ARCHIVE\\20778 - DHA TOWNSVILLE RELOCATION PROJECT - Rev 102.pdf",
+      "document_name": "20778 - DHA TOWNSVILLE RELOCATION PROJECT - Rev 102.pdf",
+      "scope_summary": "Archived system design document for PROAV-SA - DHA - Townsville Relocation Project, Revision 102."
+    },
+    {
+      "project_id": "20778",
+      "project_name": "PROAV-SA - DHA - Townsville Relocation Project",
+      "document_type": "Project Request",
+      "document_path": "C:\\Users\\SamLyndon\\OneDrive - Pro AV Solutions\\Project Files\\Project Folders\\20000 - 20999\\20778 - PROAV-SA - DHA - Townsville Relocation Project\\4. System Designs\\ARCHIVE\\20778 PROJECT REQUEST.docx",
+      "document_name": "20778 PROJECT REQUEST.docx",
+      "scope_summary": "Project request document for PROAV-SA - DHA - Townsville Relocation Project."
+    },
+    {
+      "project_id": "20778",
+      "project_name": "PROAV-SA - DHA - Townsville Relocation Project",
+      "document_type": "As-Built System Design",
+      "document_path": "C:\\Users\\SamLyndon\\OneDrive - Pro AV Solutions\\Project Files\\Project Folders\\20000 - 20999\\20778 - PROAV-SA - DHA - Townsville Relocation Project\\5. Customer Handover Documents\\As-Built Documents\\System Designs\\20778 - DHA TOWNSVILLE RELOCATION PROJECT - Rev 107 As Built.pdf",
+      "document_name": "20778 - DHA TOWNSVILLE RELOCATION PROJECT - Rev 107 As Built.pdf",
+      "scope_summary": "Customer handover as-built system design document for PROAV-SA - DHA - Townsville Relocation Project, Revision 107."
+    },
+    {
+      "project_id": "20797",
+      "project_name": "HTCHB- Ingenia Victoria Point Club House",
+      "document_type": "Proposal",
+      "document_path": "C:\\Users\\SamLyndon\\OneDrive - Pro AV Solutions\\Project Files\\Project Folders\\20000 - 20999\\20797 - HTCHB- Ingenia Victoria Point Club House\\1. Sales Handover\\20797 - Ingenia Victoria Point Club House Proposal Rev8.pdf",
+      "document_name": "20797 - Ingenia Victoria Point Club House Proposal Rev8.pdf",
+      "scope_summary": "Proposal document for HTCHB- Ingenia Victoria Point Club House project, Revision 8."
+    },
+    {
+      "project_id": "20797",
+      "project_name": "HTCHB- Ingenia Victoria Point Club House",
+      "document_type": "Project Handover",
+      "document_path": "C:\\Users\\SamLyndon\\OneDrive - Pro AV Solutions\\Project Files\\Project Folders\\20000 - 20999\\20797 - HTCHB- Ingenia Victoria Point Club House\\1. Sales Handover\\20797 - Project Handover Document.pdf",
+      "document_name": "20797 - Project Handover Document.pdf",
+      "scope_summary": "Project handover document for HTCHB- Ingenia Victoria Point Club House project."
+    },
+    {
+      "project_id": "20797",
+      "project_name": "HTCHB- Ingenia Victoria Point Club House",
+      "document_type": "Change Order",
+      "document_path": "C:\\Users\\SamLyndon\\OneDrive - Pro AV Solutions\\Project Files\\Project Folders\\20000 - 20999\\20797 - HTCHB- Ingenia Victoria Point Club House\\1. Sales Handover\\Change Orders\\20797 - Change Order 1.pdf",
+      "document_name": "20797 - Change Order 1.pdf",
+      "scope_summary": "Change Order 1 for HTCHB- Ingenia Victoria Point Club House project."
+    },
+    {
+      "project_id": "20797",
+      "project_name": "HTCHB- Ingenia Victoria Point Club House",
+      "document_type": "Change Order",
+      "document_path": "C:\\Users\\SamLyndon\\OneDrive - Pro AV Solutions\\Project Files\\Project Folders\\20000 - 20999\\20797 - HTCHB- Ingenia Victoria Point Club House\\1. Sales Handover\\Change Orders\\20797 - Change Order 10.pdf",
+      "document_name": "20797 -
+
+--- STAGE 2 ERROR ---
+
+# 4. Scope of Work
+    elif "SCOPE```python
+import os
+
+def get_document_type_and_summary(project_folder, document_path, document_name):
+    project_id = project_folder.split(' - ')[0]
+    project_name_full = project_folder.split(' - ', 1)[1]
+    
+    doc_name_base = os.path.splitext(document_name)[0] # Remove extension
+
+    doc_type = "General Document"
+    scope_summary = ""
+
+    # --- Document Type Determination and Summary Generation ---
+
+    # 1. Change Order
+    if "CO" in doc_name_base.upper() and ("CHANGE ORDER" in document_path.upper() or "SALES & CHANGE ORDERS" in document_path.upper()):
+        doc_type = "Change Order"
+        co_match = [part for part in doc_name_base.split(' - ') if part.upper().startswith
+
+--- STAGE 2 ERROR ---
+```json
+{
+  "optimized_training_data": [
+    {
+      "project_id": "21376",
+      "project_name": "PAVS NSW - WPP BNE Workspace Refurbishment",
+      "document_type": "Sales Proposal",
+      "document_path": "C:\\Users\\SamLyndon\\OneDrive - Pro AV Solutions\\Project Files\\Project Folders\\21000 - 21999\\21376 - PAVS NSW  - WPP BNE Workspace Refurbishment\\1. Sales Handover\\21376 - WPP Brisbane Workspace Refurbishment Proposal Rev2.pdf",
+      "document_name": "21376 - WPP Brisbane Workspace Refurbishment Proposal Rev2.pdf",
+      "scope_summary": "PAVS NSW - WPP BNE Workspace Refurbishment: Sales Proposal Rev2."
+    },
+    {
+      "project_id": "21376",
+      "project_name": "PAVS NSW - WPP BNE Workspace Refurbishment",
+      "document_type": "Sales Proposal",
+      "document_path": "C:\\Users\\SamLyndon\\OneDrive - Pro AV Solutions\\Project Files\\Project Folders\\21000 - 21999\\21376 - PAVS NSW  - WPP BNE Workspace Refurbishment\\1. Sales Handover\\21376 - WPP Brisbane Workspace Refurbishment Proposal Rev3.pdf",
+      "document_name": "21376 - WPP Brisbane Workspace Refurbishment Proposal Rev3.pdf",
+      "scope_summary": "PAVS NSW - WPP BNE Workspace Refurbishment: Sales Proposal Rev3."
+    },
+    {
+      "project_id": "21376",
+      "project_name": "PAVS NSW - WPP BNE Workspace Refurbishment",
+      "document_type": "Room Audit",
+      "document_path": "C:\\Users\\SamLyndon\\OneDrive - Pro AV Solutions\\Project Files\\Project Folders\\21000 - 21999\\21376 - PAVS NSW  - WPP BNE Workspace Refurbishment\\1. Sales Handover\\Room Audit[92].docx",
+      "document_name": "Room Audit[92].docx",
+      "scope_summary": "PAVS NSW - WPP BNE Workspace Refurbishment: Room Audit."
+    },
+    {
+      "project_id": "21376",
+      "project_name": "PAVS NSW - WPP BNE Workspace Refurbishment",
+      "document_type": "Change Order",
+      "document_path": "C:\\Users\\SamLyndon\\OneDrive - Pro AV Solutions\\Project Files\\Project Folders\\21000 - 21999\\21376 - PAVS NSW  - WPP BNE Workspace Refurbishment\\2. BOM & Orders\\Sales & Change Orders\\21376 - PAVs NSW - WPP Brisbane Workspace - CO19.pdf",
+      "document_name": "21376 - PAVs NSW - WPP Brisbane Workspace - CO19.pdf",
+      "scope_summary": "PAVS NSW - WPP BNE Workspace Refurbishment: Change Order CO19."
+    },
+    {
+      "project_id": "21376",
+      "project_name": "PAVS NSW - WPP BNE Workspace Refurbishment",
+      "document_type": "Sales & PO Report",
+      "document_path": "C:\\Users\\SamLyndon\\OneDrive - Pro AV Solutions\\Project Files\\Project Folders\\21000 - 21999\\21376 - PAVS NSW  - WPP BNE Workspace Refurbishment\\2. BOM & Orders\\Sales & Change Orders\\21376 - PAVs NSW - WPP Brisbane Workspace - Sales & PO Report - 19.05.2025.pdf",
+      "document_name": "21376 - PAVs NSW - WPP Brisbane Workspace - Sales & PO Report - 19.05.2025.pdf",
+      "scope_summary": "PAVS NSW - WPP BNE Workspace Refurbishment: Sales & PO Report dated 19.05.2025."
+    },
+    {
+      "project_id": "21376",
+      "project_name": "PAVS NSW - WPP BNE Workspace Refurbishment",
+      "document_type": "Change Order",
+      "document_path": "C:\\Users\\SamLyndon\\OneDrive - Pro AV Solutions\\Project Files\\Project Folders\\21000 - 21999\\21376 - PAVS NSW  - WPP BNE Workspace Refurbishment\\2. BOM & Orders\\Sales & Change Orders\\Change Orders\\21376 - PAVs NSW - WPP Brisbane Workspace - CO12.pdf",
+      "document_name": "21376 - PAVs NSW - WPP Brisbane Workspace - CO12.pdf",
+      "scope_summary": "PAVS NSW - WPP BNE Workspace Refurbishment: Change Order CO12."
+    },
+    {
+      "project_id": "21376",
+      "project_name": "PAVS NSW - WPP BNE Workspace Refurbishment",
+      "document_type": "Change Order",
+      "document_path": "C:\\Users\\SamLyndon\\OneDrive - Pro AV Solutions\\Project Files\\Project Folders\\21000 - 21999\\21376 - PAVS NSW  - WPP BNE Workspace Refurbishment\\2. BOM & Orders\\Sales & Change Orders\\Change Orders\\21376 - PAVs NSW - WPP Brisbane Workspace - CO13.pdf",
+      "document_name": "21376 - PAVs NSW - WPP Brisbane Workspace - CO13.pdf",
+      "scope_summary": "PAVS NSW - WPP BNE Workspace Refurbishment: Change Order CO13."
+    },
+    {
+      "project_id": "21376",
+      "project_name": "PAVS NSW - WPP BNE Workspace Refurbishment",
+      "document_type": "Supplier Quote",
+      "document_path": "C:\\Users\\SamLyndon\\OneDrive - Pro AV Solutions\\Project Files\\Project Folders\\21000 - 21999\\21376 - PAVS NSW  - WPP BNE Workspace Refurbishment\\1. Sales Handover\\Supplier Quotes\\Pro AV Solutions - Town Hall - V1 - Quote #00060918.pdf",
+      "document_name": "Pro AV Solutions - Town Hall - V1 - Quote #00060918.
+
