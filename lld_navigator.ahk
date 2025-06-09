@@ -53,21 +53,21 @@ folderNames := [
 mainGui := Gui("+AlwaysOnTop", "Project QuickNav")
 mainGui.Add("Text", "x20 y16", "Job Number or Search:")
 mainGui.Add("Edit", "x150 y13 w150 vJobNumber")
-mainGui.Add("GroupBox", "x20 y60 w280 h185", "Select Subfolder")
-mainGui.Add("Radio", "x40 y85 w220 vRadio1 Checked", "4. System Designs")
-mainGui.Add("Radio", "x40 y110 w220 vRadio2", "1. Sales Handover")
-mainGui.Add("Radio", "x40 y135 w220 vRadio3", "2. BOM & Orders")
-mainGui.Add("Radio", "x40 y160 w220 vRadio4", "6. Customer Handover Documents")
-mainGui.Add("Radio", "x40 y185 w220 vRadio5", "Floor Plans")
-mainGui.Add("Radio", "x40 y210 w220 vRadio6", "Site Photos")
-mainGui.Add("Checkbox", "x20 y225 w220 vDebugMode", "Show Raw Python Output")
-mainGui.Add("Checkbox", "x20 y240 w220 vGenerateTrainingData", "Generate Training Data")
-mainGui.Add("Progress", "x20 y265 w280 h1 Disabled -Theme")
+mainGui.Add("GroupBox", "x20 y40 w280 h185", "Select Subfolder")
+mainGui.Add("Radio", "x40 y65 w220 vRadio1 Checked", "System Designs")
+mainGui.Add("Radio", "x40 y90 w220 vRadio2", "Sales Handover")
+mainGui.Add("Radio", "x40 y115 w220 vRadio3", "BOM && Orders")
+mainGui.Add("Radio", "x40 y140 w220 vRadio4", "Customer Handover Documents")
+mainGui.Add("Radio", "x40 y165 w220 vRadio5", "Floor Plans")
+mainGui.Add("Radio", "x40 y190 w220 vRadio6", "Site Photos")
+mainGui.Add("Checkbox", "x20 y235 w220 vDebugMode", "Show Raw Python Output")
+mainGui.Add("Checkbox", "x20 y255 w220 vGenerateTrainingData", "Generate Training Data")
+mainGui.Add("Progress", "x20 y275 w280 h1 Disabled -Theme")
 
 ; Add a text label that shows the status of operations
-statusText := mainGui.Add("Text", "x20 y270 w280 h20 vStatusText", "Ready")
+statusText := mainGui.Add("Text", "x20 y280 w280 h60 vStatusText", "Ready")
 
-btnOpen := mainGui.Add("Button", "x110 y295 w100 h30 Default", "Open")
+btnOpen := mainGui.Add("Button", "x110 y315 w100 h30 Default", "Open")
 
 ; Use OnEvent method for AutoHotkey v2 event handling
 btnOpen.OnEvent("Click", OpenProject)

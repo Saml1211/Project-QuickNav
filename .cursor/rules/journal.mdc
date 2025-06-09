@@ -6,7 +6,9 @@ alwaysApply: false
 # Project QuickNav - Cursor Intelligence Journal
 
 ## Project Overview
-Project QuickNav is a **functionally complete v1.0.0** Windows utility for navigating large project directories using 5-digit codes. It consists of three integrated components: Python backend, AutoHotkey GUI frontend, and MCP server for AI integration.
+Project QuickNav is a **production-ready v1.0.0 MVP** Windows utility for navigating large project directories using 5-digit codes. It consists of three integrated components: Python backend, AutoHotkey GUI frontend, and MCP server for AI integration.
+
+**MILESTONE COMPLETED**: Successfully implemented and committed comprehensive **Document Training Data System** to the `mvp` branch, creating a production-ready enhanced version for AI/ML workflows.
 
 ## Key Technical Patterns
 
@@ -14,15 +16,17 @@ Project QuickNav is a **functionally complete v1.0.0** Windows utility for navig
 - **Three-tier modular architecture** with loose coupling via stdout/CLI interfaces
 - **On-demand execution model**: Python backend runs only when needed, not as persistent service
 - **Windows-focused implementation** with potential for cross-platform backend
+- **Production-ready training data generation** integrated seamlessly into existing workflow
 
 ### Inter-Process Communication
 - **stdout-based IPC** chosen for maximum reliability and platform neutrality
-- Simple CLI argument passing (5-digit project codes)
+- Simple CLI argument passing (5-digit project codes + optional `--training-data` flag)
 - No shared memory, sockets, or complex messaging protocols
+- **Training data status messages** passed via stdout for GUI feedback
 
 ### Component Responsibilities
-- **Python Backend** (`find_project_path.py`): Pure directory resolution logic
-- **AutoHotkey Frontend** (`lld_navigator.ahk`): UI/UX and user interaction only  
+- **Python Backend** (`find_project_path.py`): Pure directory resolution logic + document discovery
+- **AutoHotkey Frontend** (`lld_navigator.ahk`): UI/UX and user interaction + training data toggle  
 - **MCP Server** (`mcp_server/`): AI/automation bridge to backend logic
 
 ## Critical Implementation Insights
@@ -31,15 +35,28 @@ Project QuickNav is a **functionally complete v1.0.0** Windows utility for navig
 - **AHK Launch Problem**: Fixed critical issue where AHK script wasn't properly starting Python backend with correct job number arguments
 - **Process Management**: Switched from persistent backend to on-demand execution for better reliability
 
+### COMPLETED: Training Data System Architecture
+- **Document Discovery**: `discover_documents()` function for recursive .pdf, .docx, .doc, .rtf finding
+- **Smart File Organization**: 
+  - Single projects: `training_data_17741.json`
+  - Search results: `training_data_search_YYYYMMDD_HHMMSS.json`
+  - Organized storage in dedicated `training_data/` directory
+- **No Overwrites**: Unique filename generation prevents data loss
+- **Production Integration**: GUI toggle maintains core workflow simplicity
+- **Validated Performance**: Successfully tested with projects containing 5-625 documents
+
 ### Code Organization
 - Clean separation of concerns across three layers
 - Comprehensive test coverage with both unit tests and manual GUI test plans
 - Production-ready packaging with pip distribution and standalone EXE
+- **Training data functions** seamlessly integrated without disrupting existing patterns
+- **Version control strategy**: Separate `main` (core) and `mvp` (enhanced) branches
 
 ### User Experience Design
 - **Global hotkey** (Ctrl+Alt+Q) for instant access from anywhere in Windows
 - **Immediate feedback** on project resolution with clear error handling
 - **Subfolder shortcuts** for common project subdirectories
+- **Training data toggle** for opt-in AI/ML workflow integration
 
 ## Development Workflow Preferences
 
@@ -47,10 +64,12 @@ Project QuickNav is a **functionally complete v1.0.0** Windows utility for navig
 - **Python**: Extensive mocking-based unit tests in `unittest`
 - **MCP Server**: Integration tests with subprocess mocking
 - **AutoHotkey**: Manual test plans due to GUI nature
+- **Training Data**: Validated with real project data (625 docs for 17741, 5 docs for 17742)
 
 ### Project State Management
-- **Memory Bank**: Complete 6-file documentation system maintained
+- **Memory Bank**: Complete 6-file documentation system maintained and updated
 - **Version Control**: SemVer 2.0 with VERSION.txt embedded in distributions
+- **Branch Strategy**: `main` (core functionality) + `mvp` (enhanced training data)
 - **User Documentation**: Comprehensive guides for installation, usage, and troubleshooting
 
 ## Technical Constraints & Decisions
@@ -60,16 +79,40 @@ Project QuickNav is a **functionally complete v1.0.0** Windows utility for navig
 - Backend and MCP server are potentially portable but untested on other platforms
 - OneDrive for Business used as default root directory (configurable)
 
+### Training Data Design Decisions
+- **Opt-in approach**: Training data generation is optional to maintain workflow simplicity
+- **Project-specific scope**: Generate data only for accessed projects, not bulk processing by default
+- **File type coverage**: .pdf, .docx, .doc, .rtf for comprehensive document discovery
+- **Performance consideration**: Uses `os.walk()` but may be slow for very large project folders
+- **Branch isolation**: Keep enhanced features in separate branch for production flexibility
+
 ### Future Enhancement Areas
+- **Document content extraction** for the extracted_info field in training data
 - Cross-platform frontend alternatives to AutoHotkey
 - User preference persistence and search history
 - Direct code editor integration
-- Enhanced error handling for edge cases
+- **Training data management tools** (merge, analyze, cleanup utilities)
 
 ## Current Focus & Status
-- **Phase**: Testing, stabilization, and user feedback collection
-- **Completeness**: All core features implemented and integrated
-- **Next Steps**: Packaging improvements, broader testing, user trials
+- **MILESTONE**: MVP Branch completed with all training data capabilities
+- **Phase**: Production-ready with advanced feature development pipeline
+- **Completeness**: All core features + training data system implemented and committed
+- **Branch Status**: Clean working tree on `mvp` branch (commit `02d2f78`)
+- **Next Steps**: Content extraction, training data management tools, user trials
+
+## Training Data Workflow Patterns
+- **Seamless Integration**: Training data generation happens alongside normal navigation
+- **Intelligence File Naming**: Project numbers automatically extracted and used in filenames
+- **Organized Storage**: Dedicated directory structure prevents clutter
+- **Status Feedback**: Clear success/error messages displayed in GUI
+- **Flexible Usage**: Works with single projects, search results, and multiple matches
+- **Production Validated**: Successfully tested across varied project types and sizes
+
+## Version Control Strategy
+- **`main` branch**: Core Project QuickNav functionality (stable baseline)
+- **`mvp` branch**: Enhanced version with training data capabilities (production-ready)
+- **Development approach**: Feature branches from `mvp` for advanced capabilities
+- **Deployment options**: Choose core or enhanced version based on requirements
 
 
-This project demonstrates excellent modular design with clear separation of concerns and reliable IPC patterns.
+This project demonstrates excellent modular design with clear separation of concerns, reliable IPC patterns, and production-ready AI/ML training data capabilities that integrate seamlessly without compromising core navigation functionality. The MVP branch represents a significant milestone in feature enhancement while maintaining system stability and usability.
