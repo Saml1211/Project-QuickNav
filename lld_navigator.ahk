@@ -61,12 +61,13 @@ mainGui.Add("Radio", "x40 y160 w220 vRadio4", "6. Customer Handover Documents")
 mainGui.Add("Radio", "x40 y185 w220 vRadio5", "Floor Plans")
 mainGui.Add("Radio", "x40 y210 w220 vRadio6", "Site Photos")
 mainGui.Add("Checkbox", "x20 y225 w220 vDebugMode", "Show Raw Python Output")
-mainGui.Add("Progress", "x20 y255 w280 h1 Disabled -Theme")
+mainGui.Add("Checkbox", "x20 y240 w220 vGenerateTrainingData", "Generate Training Data")
+mainGui.Add("Progress", "x20 y265 w280 h1 Disabled -Theme")
 
 ; Add a text label that shows the status of operations
-statusText := mainGui.Add("Text", "x20 y260 w280 h20 vStatusText", "Ready")
+statusText := mainGui.Add("Text", "x20 y270 w280 h20 vStatusText", "Ready")
 
-btnOpen := mainGui.Add("Button", "x110 y285 w100 h30 Default", "Open")
+btnOpen := mainGui.Add("Button", "x110 y295 w100 h30 Default", "Open")
 
 ; Use OnEvent method for AutoHotkey v2 event handling
 btnOpen.OnEvent("Click", OpenProject)
@@ -104,6 +105,7 @@ OpenProject(ctrl, info) {
     ; Get form data
     params := mainGui.Submit(false)  ; false to keep GUI visible
     DebugMode := params.DebugMode
+    GenerateTrainingData := params.GenerateTrainingData
     jobNumber := params.JobNumber
 
     ; Check if the input is empty
@@ -144,7 +146,10 @@ OpenProject(ctrl, info) {
     ; Prepare the command to run the Python script
     comspec := A_ComSpec
     tempFile := A_Temp . "\project_quicknav_pyout.txt"
-    cmd := comspec . " /C python " . Chr(34) . scriptPath . Chr(34) . " " . jobNumber . " > " . Chr(34) . tempFile . Chr(34) . " 2>&1"
+    
+    ; Build the command with optional training data flag
+    trainingFlag := GenerateTrainingData ? " --training-data" : ""
+    cmd := comspec . " /C python " . Chr(34) . scriptPath . Chr(34) . " " . jobNumber . trainingFlag . " > " . Chr(34) . tempFile . Chr(34) . " 2>&1"
 
     try {
         ; Run the Python script and wait for it to complete
@@ -166,6 +171,30 @@ OpenProject(ctrl, info) {
         ; Show debug output if enabled
         if (DebugMode) {
             MsgBox("Raw Python output:`n`n" . output, "Debug Output", 64)
+        }
+
+        ; Check for training data messages and handle them
+        if (InStr(output, "TRAINING:") > 0) {
+            ; Extract training message
+            lines := StrSplit(output, "`n")
+            for i, line in lines {
+                if (InStr(line, "TRAINING:") == 1) {
+                    trainingMsg := SubStr(line, 10)
+                    MsgBox("Training data generated successfully:`n" . trainingMsg, "Training Data", 64)
+                    break
+                }
+            }
+        }
+        else if (InStr(output, "TRAINING_ERROR:") > 0) {
+            ; Extract training error message
+            lines := StrSplit(output, "`n")
+            for i, line in lines {
+                if (InStr(line, "TRAINING_ERROR:") == 1) {
+                    trainingError := SubStr(line, 16)
+                    MsgBox("Training data generation failed:`n" . trainingError, "Training Error", 16)
+                    break
+                }
+            }
         }
 
         ; Process the output from the Python script

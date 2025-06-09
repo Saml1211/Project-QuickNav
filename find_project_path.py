@@ -2,6 +2,8 @@ import os
 import sys
 import math
 import re
+import json
+from datetime import datetime
 
 def print_and_exit(msg):
     """
@@ -209,20 +211,175 @@ def search_by_name(search_term, pf_path):
 
     return matches
 
+def discover_documents(project_path):
+    """
+    Recursively find all PDF, Word, and RTF documents in a project folder.
+
+    Args:
+        project_path (str): Path to the project directory to search.
+
+    Returns:
+        list[str]: List of full file paths to found documents (.pdf, .docx, .doc, .rtf).
+    """
+    document_extensions = {'.pdf', '.docx', '.doc', '.rtf'}
+    document_paths = []
+    
+    try:
+        for root, dirs, files in os.walk(project_path):
+            for file in files:
+                # Get file extension in lowercase for case-insensitive comparison
+                file_ext = os.path.splitext(file)[1].lower()
+                if file_ext in document_extensions:
+                    full_path = os.path.join(root, file)
+                    document_paths.append(os.path.abspath(full_path))
+    except Exception:
+        # If there's an error accessing the directory, return empty list
+        pass
+    
+    return document_paths
+
+def training_script(base_path, output_file='training_data.json'):
+    """
+    Create a comprehensive catalog of all documents across all projects.
+
+    Args:
+        base_path (str): Path to the Project Folders directory or OneDrive path.
+        output_file (str): Name of the JSON file to save results to.
+
+    Returns:
+        list[dict]: Training data list with project and document information.
+    """
+    training_data = []
+    
+    # Get the Project Folders path
+    if os.path.basename(base_path) == "Project Folders":
+        pf_path = base_path
+    else:
+        pf_path = get_project_folders(base_path)
+    
+    try:
+        # Iterate through all range folders (e.g., "10000 - 10999")
+        range_folders = os.listdir(pf_path)
+        for range_folder in range_folders:
+            range_path = os.path.join(pf_path, range_folder)
+            
+            # Skip if not a directory or doesn't match the range pattern
+            if not os.path.isdir(range_path) or not re.match(r"^\d+ - \d+$", range_folder):
+                continue
+            
+            try:
+                # Get all project folders within this range
+                project_entries = os.listdir(range_path)
+                for project_entry in project_entries:
+                    project_path = os.path.join(range_path, project_entry)
+                    
+                    # Skip if not a directory
+                    if not os.path.isdir(project_path):
+                        continue
+                    
+                    # Find all documents in this project folder
+                    documents = discover_documents(project_path)
+                    
+                    # Add each document to the training data
+                    for doc_path in documents:
+                        document_name = os.path.basename(doc_path)
+                        training_entry = {
+                            "project_folder": project_entry,
+                            "document_path": doc_path,
+                            "document_name": document_name,
+                            "extracted_info": {}
+                        }
+                        training_data.append(training_entry)
+                        
+            except Exception:
+                # Skip this range folder if there's an error
+                continue
+                
+    except Exception:
+        print_and_exit("ERROR:Unable to access project folders for training data collection")
+    
+    # Save training data to JSON file
+    try:
+        with open(output_file, 'w', encoding='utf-8') as f:
+            json.dump(training_data, f, indent=2, ensure_ascii=False)
+    except Exception:
+        print_and_exit(f"ERROR:Unable to save training data to {output_file}")
+    
+    return training_data
+
+def get_training_data_filename(project_paths, is_search=False):
+    """
+    Generate a unique filename for training data based on project path(s).
+    
+    Args:
+        project_paths (str or list): Single project path or list of project paths.
+        is_search (bool): Whether this is from a search operation with multiple results.
+    
+    Returns:
+        str: Full path to the training data JSON file.
+    """
+    # Create training_data directory if it doesn't exist
+    training_dir = "training_data"
+    os.makedirs(training_dir, exist_ok=True)
+    
+    if isinstance(project_paths, str):
+        # Single project
+        project_name = os.path.basename(project_paths)
+        # Extract project number if it matches the pattern
+        match = re.match(r"^(\d{5}) - ", project_name)
+        if match:
+            project_num = match.group(1)
+            filename = f"training_data_{project_num}.json"
+        else:
+            # Fallback to sanitized project name
+            safe_name = re.sub(r'[<>:"/\\|?*]', '_', project_name)
+            filename = f"training_data_{safe_name}.json"
+    else:
+        # Multiple projects
+        if is_search:
+            # For search results, use timestamp
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"training_data_search_{timestamp}.json"
+        else:
+            # For multiple exact matches, combine project numbers
+            project_nums = []
+            for path in project_paths:
+                project_name = os.path.basename(path)
+                match = re.match(r"^(\d{5}) - ", project_name)
+                if match:
+                    project_nums.append(match.group(1))
+            
+            if project_nums:
+                filename = f"training_data_{'_'.join(project_nums)}.json"
+            else:
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                filename = f"training_data_multiple_{timestamp}.json"
+    
+    return os.path.join(training_dir, filename)
+
 def main():
     """
     Main entry point for the CLI tool.
 
     Accepts a single argument (5-digit project number or search term), resolves the folder(s),
     and prints the result (or error/selection prompt) to stdout.
+    Optionally accepts --training-data flag to generate training data after successful operation.
 
     Exits:
         With status message on success or error.
     """
-    if len(sys.argv) != 2:
+    # Check for training data flag
+    generate_training_data = False
+    args = sys.argv[1:]
+    
+    if "--training-data" in args:
+        generate_training_data = True
+        args.remove("--training-data")
+    
+    if len(args) != 1:
         print_and_exit("ERROR:Exactly one argument required (project number or search term)")
 
-    search_term = sys.argv[1]
+    search_term = args[0]
     onedrive_folder = get_onedrive_folder()
     pfolder = get_project_folders(onedrive_folder)
 
@@ -239,7 +396,35 @@ def main():
         if not matches:
             print_and_exit(f"ERROR:No project folder found for number {proj_num}")
         elif len(matches) == 1:
-            print_and_exit(f"SUCCESS:{matches[0]}")
+            result_message = f"SUCCESS:{matches[0]}"
+            print(result_message)
+            # Generate training data if requested and operation was successful
+            if generate_training_data:
+                try:
+                    # Generate training data only for this specific project
+                    training_data = []
+                    documents = discover_documents(matches[0])
+                    project_name = os.path.basename(matches[0])
+                    
+                    for doc_path in documents:
+                        document_name = os.path.basename(doc_path)
+                        training_entry = {
+                            "project_folder": project_name,
+                            "document_path": doc_path,
+                            "document_name": document_name,
+                            "extracted_info": {}
+                        }
+                        training_data.append(training_entry)
+                    
+                    # Save training data to JSON file
+                    filename = get_training_data_filename(matches[0])
+                    with open(filename, 'w', encoding='utf-8') as f:
+                        json.dump(training_data, f, indent=2, ensure_ascii=False)
+                    
+                    print(f"TRAINING:Generated training data for project {project_name} with {len(training_data)} documents (saved to {filename})")
+                except Exception as e:
+                    print(f"TRAINING_ERROR:Failed to generate training data: {str(e)}")
+            sys.exit(0)
         else:
             print_and_exit("SELECT:" + "|".join(matches))
     else:
@@ -249,9 +434,66 @@ def main():
         if not matches:
             print_and_exit(f"ERROR:No project folders found containing '{search_term}'")
         elif len(matches) == 1:
-            print_and_exit(f"SUCCESS:{matches[0]}")
+            result_message = f"SUCCESS:{matches[0]}"
+            print(result_message)
+            # Generate training data if requested and operation was successful
+            if generate_training_data:
+                try:
+                    # Generate training data only for this specific project
+                    training_data = []
+                    documents = discover_documents(matches[0])
+                    project_name = os.path.basename(matches[0])
+                    
+                    for doc_path in documents:
+                        document_name = os.path.basename(doc_path)
+                        training_entry = {
+                            "project_folder": project_name,
+                            "document_path": doc_path,
+                            "document_name": document_name,
+                            "extracted_info": {}
+                        }
+                        training_data.append(training_entry)
+                    
+                    # Save training data to JSON file
+                    filename = get_training_data_filename(matches[0])
+                    with open(filename, 'w', encoding='utf-8') as f:
+                        json.dump(training_data, f, indent=2, ensure_ascii=False)
+                    
+                    print(f"TRAINING:Generated training data for project {project_name} with {len(training_data)} documents (saved to {filename})")
+                except Exception as e:
+                    print(f"TRAINING_ERROR:Failed to generate training data: {str(e)}")
+            sys.exit(0)
         else:
-            print_and_exit("SEARCH:" + "|".join(matches))
+            result_message = "SEARCH:" + "|".join(matches)
+            print(result_message)
+            # Generate training data if requested and operation was successful
+            if generate_training_data:
+                try:
+                    # Generate training data for all found projects from search
+                    training_data = []
+                    for project_path in matches:
+                        documents = discover_documents(project_path)
+                        project_name = os.path.basename(project_path)
+                        
+                        for doc_path in documents:
+                            document_name = os.path.basename(doc_path)
+                            training_entry = {
+                                "project_folder": project_name,
+                                "document_path": doc_path,
+                                "document_name": document_name,
+                                "extracted_info": {}
+                            }
+                            training_data.append(training_entry)
+                    
+                    # Save training data to JSON file
+                    filename = get_training_data_filename(matches, True)
+                    with open(filename, 'w', encoding='utf-8') as f:
+                        json.dump(training_data, f, indent=2, ensure_ascii=False)
+                    
+                    print(f"TRAINING:Generated training data for {len(matches)} projects with {len(training_data)} documents (saved to {filename})")
+                except Exception as e:
+                    print(f"TRAINING_ERROR:Failed to generate training data: {str(e)}")
+            sys.exit(0)
 
 if __name__ == "__main__":
     main()

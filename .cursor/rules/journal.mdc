@@ -1,0 +1,75 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Project QuickNav - Cursor Intelligence Journal
+
+## Project Overview
+Project QuickNav is a **functionally complete v1.0.0** Windows utility for navigating large project directories using 5-digit codes. It consists of three integrated components: Python backend, AutoHotkey GUI frontend, and MCP server for AI integration.
+
+## Key Technical Patterns
+
+### Architecture Design
+- **Three-tier modular architecture** with loose coupling via stdout/CLI interfaces
+- **On-demand execution model**: Python backend runs only when needed, not as persistent service
+- **Windows-focused implementation** with potential for cross-platform backend
+
+### Inter-Process Communication
+- **stdout-based IPC** chosen for maximum reliability and platform neutrality
+- Simple CLI argument passing (5-digit project codes)
+- No shared memory, sockets, or complex messaging protocols
+
+### Component Responsibilities
+- **Python Backend** (`find_project_path.py`): Pure directory resolution logic
+- **AutoHotkey Frontend** (`lld_navigator.ahk`): UI/UX and user interaction only  
+- **MCP Server** (`mcp_server/`): AI/automation bridge to backend logic
+
+## Critical Implementation Insights
+
+### Resolved Issues
+- **AHK Launch Problem**: Fixed critical issue where AHK script wasn't properly starting Python backend with correct job number arguments
+- **Process Management**: Switched from persistent backend to on-demand execution for better reliability
+
+### Code Organization
+- Clean separation of concerns across three layers
+- Comprehensive test coverage with both unit tests and manual GUI test plans
+- Production-ready packaging with pip distribution and standalone EXE
+
+### User Experience Design
+- **Global hotkey** (Ctrl+Alt+Q) for instant access from anywhere in Windows
+- **Immediate feedback** on project resolution with clear error handling
+- **Subfolder shortcuts** for common project subdirectories
+
+## Development Workflow Preferences
+
+### Testing Strategy
+- **Python**: Extensive mocking-based unit tests in `unittest`
+- **MCP Server**: Integration tests with subprocess mocking
+- **AutoHotkey**: Manual test plans due to GUI nature
+
+### Project State Management
+- **Memory Bank**: Complete 6-file documentation system maintained
+- **Version Control**: SemVer 2.0 with VERSION.txt embedded in distributions
+- **User Documentation**: Comprehensive guides for installation, usage, and troubleshooting
+
+## Technical Constraints & Decisions
+
+### Platform Limitations
+- Full functionality requires Windows due to AutoHotkey dependency
+- Backend and MCP server are potentially portable but untested on other platforms
+- OneDrive for Business used as default root directory (configurable)
+
+### Future Enhancement Areas
+- Cross-platform frontend alternatives to AutoHotkey
+- User preference persistence and search history
+- Direct code editor integration
+- Enhanced error handling for edge cases
+
+## Current Focus & Status
+- **Phase**: Testing, stabilization, and user feedback collection
+- **Completeness**: All core features implemented and integrated
+- **Next Steps**: Packaging improvements, broader testing, user trials
+
+
+This project demonstrates excellent modular design with clear separation of concerns and reliable IPC patterns.
