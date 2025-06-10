@@ -7,7 +7,20 @@
   - Python backend for project directory lookup
   - AutoHotkey frontend for user interaction and navigation
   - MCP server for AI and automation integration
-  
+
+### NEW: Build & Distribution System (Production Ready)
+- **COMPLETED: AutoHotkey EXE Build Pipeline (`scripts/build_exe.ps1`):**
+  - Professional AHK2EXE compilation system for standalone executable creation
+  - Dynamic path resolution works from any directory execution
+  - Comprehensive AutoHotkey v2 installation detection across common paths
+  - Intelligent compiler location with multiple fallback directories
+  - Robust error handling with clear user feedback for missing dependencies
+  - Version integration from VERSION.txt for consistent naming
+  - Clean terminal output with build status and file size reporting
+  - **Successfully tested**: Creates `quicknav-1.0.0-win64.exe` from `src/lld_navigator.ahk`
+  - **Architecture Clarity**: Correctly identified and implemented AutoHotkey compilation (not Python)
+
+### Core Training Data System (Production Ready)
 - **COMPLETED: Document Discovery & Training Data System:**
   - `discover_documents()` function for recursive document finding (.pdf, .docx, .doc, .rtf)
   - `training_script()` function for comprehensive training data generation

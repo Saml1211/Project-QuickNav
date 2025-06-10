@@ -8,15 +8,42 @@ alwaysApply: false
 ## Project Overview
 Project QuickNav is a **production-ready v1.0.0 MVP** Windows utility for navigating large project directories using 5-digit codes. It consists of three integrated components: Python backend, AutoHotkey GUI frontend, and MCP server for AI integration.
 
+**LATEST MILESTONE**: Successfully implemented **Professional Build System** with `scripts/build_exe.ps1` for AutoHotkey EXE compilation and distribution.
+
 **MILESTONE COMPLETED**: Successfully implemented and committed comprehensive **Document Training Data System** to the `mvp` branch, creating a production-ready enhanced version for AI/ML workflows.
 
 ## Key Technical Patterns
+
+### NEW: Build & Distribution Patterns
+
+#### Architecture Understanding
+- **Critical Insight**: This is an **AutoHotkey application** requiring AHK2EXE compilation, NOT a Python application
+- **Incorrect Assumption**: Initially attempted PyInstaller approach (wrong technology stack)
+- **Correct Approach**: AHK2EXE compiler with AutoHotkey v2 dependency
+
+#### Build System Design
+- **Dynamic Path Resolution**: `$ScriptDir` and `$ProjectRoot` variables for execution from any directory
+- **Multi-Location Detection**: Search strategy across common AutoHotkey v2 installation paths:
+  ```
+  C:\Program Files\AutoHotkey\v2\AutoHotkey64.exe
+  C:\Program Files (x86)\AutoHotkey\v2\AutoHotkey64.exe
+  %LOCALAPPDATA%\Programs\AutoHotkey\v2\AutoHotkey64.exe
+  ```
+- **Compiler Discovery**: Searches multiple directories for Ahk2Exe.exe with comprehensive fallback
+- **Error Handling Strategy**: Temporarily disable `$ErrorActionPreference = 'Stop'` for specific operations
+
+#### Distribution Patterns
+- **Version Integration**: Automatic reading from `VERSION.txt` for consistent naming
+- **Output Structure**: `src/lld_navigator.ahk` → `dist/quicknav-{version}-win64.exe`
+- **Standalone Distribution**: Creates self-contained EXE requiring no additional installations
+- **Professional Output**: Clean terminal feedback with build status and file size reporting
 
 ### Architecture Design
 - **Three-tier modular architecture** with loose coupling via stdout/CLI interfaces
 - **On-demand execution model**: Python backend runs only when needed, not as persistent service
 - **Windows-focused implementation** with potential for cross-platform backend
 - **Production-ready training data generation** integrated seamlessly into existing workflow
+- **NEW: Complete build pipeline** for professional deployment and distribution
 
 ### Inter-Process Communication
 - **stdout-based IPC** chosen for maximum reliability and platform neutrality

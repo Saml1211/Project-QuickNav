@@ -16,15 +16,25 @@ Project QuickNav has evolved from a three-tier navigation system into a comprehe
 3. **MCP Server (`mcp_server/`):**  
    Exposes backend navigation functions to AI agents or external systems through the Model Context Protocol.
 
-### NEW: Advanced Analysis & Intelligence Layer
+### NEW: Build & Distribution System (Production Ready)
 
-4. **Hybrid Training Analyzer (`hybrid_training_analyzer.py`):**
+4. **Build Pipeline (`scripts/build_exe.ps1`):**
+   Professional AutoHotkey compilation system for creating standalone executables.
+   - **Dynamic Environment Detection**: Automatically locates AutoHotkey v2 and AHK2EXE compiler
+   - **Cross-Directory Execution**: Works from any directory with intelligent path resolution
+   - **Version Integration**: Reads VERSION.txt for consistent executable naming
+   - **Robust Error Handling**: Comprehensive feedback for missing dependencies
+   - **Distribution Ready**: Creates `quicknav-{version}-win64.exe` for end-user deployment
+
+### Advanced Analysis & Intelligence Layer
+
+5. **Hybrid Training Analyzer (`hybrid_training_analyzer.py`):**
    Processes training data using 90% rule-based + 10% AI approach for optimal speed and reliability.
 
-5. **AI Agent Training Generator (`ai_agent_training_generator.py`):**
+6. **AI Agent Training Generator (`ai_agent_training_generator.py`):**
    Generates structured training examples and actionable insights for improving AI agents.
 
-6. **Project Extractor (`project_extractor.py`):**
+7. **Project Extractor (`project_extractor.py`):**
    Provides comprehensive project-specific analysis based on 5-digit project numbers.
 
 ## Key Technical Decisions
@@ -77,21 +87,30 @@ Project QuickNav has evolved from a three-tier navigation system into a comprehe
    - MCP server invokes Python backend on-demand with the proper job number.
    - Path is returned to the AI agent, enabling automated operations.
 
-### NEW: Analysis & Intelligence Flow
+### NEW: Build & Distribution Flow
 
-3. **Training Data Analysis Pipeline:**
+3. **Development to Production Pipeline:**
+   ```
+   src/lld_navigator.ahk → build_exe.ps1 → quicknav-{version}-win64.exe
+                                        ↓
+   Standalone Distribution → End User Installation
+   ```
+
+### Analysis & Intelligence Flow
+
+4. **Training Data Analysis Pipeline:**
    ```
    training_data/*.json → Hybrid Analyzer → hybrid_analysis_results.json
                                         ↓
    AI Training Generator → ai_agent_training_dataset.json + insights
    ```
 
-4. **Project-Specific Analysis Flow:**
+5. **Project-Specific Analysis Flow:**
    ```
    Project ID → Project Extractor → project_profile_[id].json + summary
    ```
 
-5. **Integrated Intelligence Workflow:**
+6. **Integrated Intelligence Workflow:**
    ```
    QuickNav → Training Data → Hybrid Analysis → AI Training → Project Profiles
    ```
