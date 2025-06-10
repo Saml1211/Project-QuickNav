@@ -2,12 +2,19 @@
 
 ## Current Focus
 
-Project QuickNav has evolved from a simple navigation tool into a comprehensive AV project intelligence platform with advanced analysis capabilities:
+**MAJOR MILESTONE: Repository Split Complete** - Successfully split Project QuickNav into two focused repositories:
 
+**QuickNav-Core (this repository):**
 - **Core Components**: Python backend, AutoHotkey GUI, MCP server (production ready)
 - **Training Data System**: Document discovery and training data generation (production ready)
+- **Build System**: Robust AutoHotkey compilation system for standalone EXE distribution
+
+**AV Project Analysis Tools (separate repository):**
 - **Advanced Analysis Suite**: Four powerful scripts for project intelligence and AI agent improvement
-- **NEW: Build System**: Robust AutoHotkey compilation system for standalone EXE distribution
+- **Hybrid Training Analyzer**: 90% rule-based + 10% AI processing for optimal speed and reliability
+- **AI Agent Training Generator**: Creates structured training examples and actionable insights
+- **Project Extractor**: Comprehensive project-specific analysis and health assessment
+- **Scope Generator**: Professional client-ready project scope documents
 
 **LATEST MILESTONE: Build System Optimization** - Successfully created and refined `scripts/build_exe.ps1` for proper AutoHotkey EXE compilation:
 
@@ -30,7 +37,17 @@ Current development capability includes both advanced analytics and professional
 
 ## Recent Changes
 
-### Build System Development (Latest)
+### Repository Split Implementation (Latest)
+- **COMPLETED: Repository Split** - Successfully extracted analysis tools to separate repository:
+  - **Moved to AV Project Analysis Tools**: `analysis/`, `analysis-results/`, `project-scopes/` directories
+  - **Moved Documentation**: Analysis-specific documentation and guides
+  - **Preserved in QuickNav**: Core navigation, training data generation, build system, MCP server
+  - **Updated Documentation**: README.md updated with cross-repository references
+  - **Migration Logs**: Comprehensive documentation of split rationale and process
+- **Architecture Benefits**: Clear separation of concerns, focused dependencies, independent development
+- **Data Flow Maintained**: QuickNav generates training data → Analysis Tools process insights
+
+### Build System Development
 - **NEW: AutoHotkey Build Script** - Created `scripts/build_exe.ps1` for professional EXE compilation:
   - **Architecture Correction**: Replaced incorrect PyInstaller approach with proper AHK2EXE compilation
   - **Dynamic Path Resolution**: Script calculates project root automatically from any execution location
@@ -99,12 +116,13 @@ Current development capability includes both advanced analytics and professional
 
 ## Integration Workflow
 
-### Enhanced Processing Pipeline
-1. **QuickNav** generates `training_data_[project].json`
-2. **Hybrid Analyzer** processes all training files → `hybrid_analysis_results.json`
-3. **AI Training Generator** creates training examples → `ai_agent_training_dataset.json`
-4. **Project Extractor** analyzes specific projects → `project_profile_[id].json`
-5. **Scope Generator** creates markdown documentation → `[project_id]_project_scope.md`
+### Cross-Repository Processing Pipeline
+1. **QuickNav-Core** generates `training_data_[project].json` in `src/training_data/`
+2. **Copy training data** to AV Project Analysis Tools repository
+3. **Hybrid Analyzer** processes all training files → `hybrid_analysis_results.json`
+4. **AI Training Generator** creates training examples → `ai_agent_training_dataset.json`
+5. **Project Extractor** analyzes specific projects → `project_profile_[id].json`
+6. **Scope Generator** creates markdown documentation → `[project_id]_project_scope.md`
 
 ### Common Architecture Patterns
 - **AV Project Structure**: 6 standard categories (Sales, BOM, PMO, Designs, Handover, Support)
@@ -117,16 +135,16 @@ Current development capability includes both advanced analytics and professional
 ## Active Development Focus
 
 ### Current Priorities
-1. **Testing & Validation**: Comprehensive testing of all four analysis scripts with real project data
-2. **Documentation Refinement**: User guides and integration instructions for complete suite
-3. **Client Communication**: Professional scope documents for improved client reporting
-4. **Performance Optimization**: Further speed improvements for large datasets
+1. **Repository Integration**: Optimize workflow between QuickNav-Core and Analysis Tools repositories
+2. **Documentation Refinement**: Update documentation for split architecture
+3. **Cross-Repository Testing**: Validate training data generation → analysis workflow
+4. **Performance Optimization**: Ensure efficient data transfer between repositories
 
 ### Immediate Next Steps
-- **Production Testing**: Test scope generator with diverse project types and client scenarios
-- **User Feedback**: Gather feedback on scope document quality and usefulness for client communication
-- **Integration Planning**: Determine optimal workflow for scope document generation in client processes
-- **Template Customization**: Consider customizable scope document templates for different client needs
+- **User Workflow Documentation**: Create guides for using both repositories together
+- **Testing Integration**: Validate complete end-to-end workflow across repositories
+- **Dependencies Management**: Ensure clean separation of requirements and dependencies
+- **Development Coordination**: Establish practices for coordinated development across repositories
 
 ## Active Decisions & Considerations
 
@@ -150,12 +168,23 @@ Current development capability includes both advanced analytics and professional
 Project QuickNav has evolved from:
 - **Original**: Simple project navigation utility
 - **MVP**: Navigation + training data generation
-- **Current**: Comprehensive AV project intelligence platform with AI agent development and professional documentation capabilities
+- **Current**: Two-repository ecosystem for complete AV project intelligence
 
-The platform now provides:
+**QuickNav-Core provides:**
 - **Operational Efficiency**: Fast project navigation and access
+- **Training Data Generation**: Structured document discovery and cataloging
+- **AI Integration**: MCP server for automation workflows
+- **Distribution**: Professional build system for standalone deployment
+
+**AV Project Analysis Tools provides:**
 - **Business Intelligence**: Project health monitoring and portfolio analysis
 - **AI Development**: Structured training data and improvement insights
 - **Quality Assurance**: Automated documentation assessment and risk identification
 - **Strategic Planning**: Technology trend analysis and resource planning capabilities
-- **Client Communication**: Professional scope documents and standardized reporting for enhanced client relationships
+- **Client Communication**: Professional scope documents and standardized reporting
+
+**Combined Ecosystem Benefits:**
+- **Clear Separation**: Navigation vs Analysis responsibilities
+- **Independent Development**: Each repository evolves at its own pace
+- **Reusability**: Analysis tools can work with other data sources
+- **Maintainability**: Smaller, focused codebases with specific dependencies
