@@ -98,10 +98,17 @@ OpenProject(ctrl, info) {
     mainGui["StatusText"].Value := "Processing..."
 
     ; Use test_find_project_path.py instead if the real backend can't be found
-    ; Both scripts are now in the same src directory
+    ; Look for scripts in the same directory first, then fallback to dist structure
     scriptPath := "find_project_path.py"
-    if !FileExist(scriptPath)
+    if !FileExist(scriptPath) {
         scriptPath := "test_find_project_path.py"
+        if !FileExist(scriptPath) {
+            ; Try relative path for dist structure
+            scriptPath := "..\src\find_project_path.py"
+            if !FileExist(scriptPath)
+                scriptPath := "..\src\test_find_project_path.py"
+        }
+    }
 
     ; Get form data
     params := mainGui.Submit(false)  ; false to keep GUI visible

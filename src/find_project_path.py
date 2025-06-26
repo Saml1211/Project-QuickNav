@@ -319,7 +319,7 @@ def get_training_data_filename(project_paths, is_search=False):
         str: Full path to the training data JSON file.
     """
     # Create training_data directory if it doesn't exist
-    training_dir = "training_data"
+    training_dir = "C:/Users/SamLyndon/Projects/Work/av-project-analysis-tools/training_data"
     os.makedirs(training_dir, exist_ok=True)
     
     if isinstance(project_paths, str):

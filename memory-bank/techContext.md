@@ -21,12 +21,14 @@
 - **Compilation Target:** `src/lld_navigator.ahk` → `dist/quicknav-{version}-win64.exe`
 - **Version Management:** Automatic version reading from `VERSION.txt`
 - **Distribution Ready:** Creates standalone EXE requiring no additional installations
+- **CRITICAL: Path Resolution:** Compiled EXE includes intelligent path handling to locate Python scripts in `../src/` relative to distribution directory
 
 ## Technical Constraints
 
 - **Windows-only:** AHK and full integration only supported on Windows. Other components may be portable but are untested on non-Windows platforms.
 - **AutoHotkey v2 Dependency:** Build system specifically requires AutoHotkey v2 with compiler support.
 - **Path Handling:** All path operations and outputs are Windows-style. Care is taken in the Python backend and AHK frontend to ensure compatibility.
+- **Distribution Architecture:** Compiled EXE must be placed in `/dist` directory to maintain correct relative path relationship with Python scripts in `/src`
 - **IPC (Inter-Process Communication):** All component communication uses stdout/stdin or explicit CLI calls. No sockets or shared memory used.
 
 ## Dependencies
@@ -40,10 +42,13 @@
 - Access to the root directory where all project folders are stored
 - User permissions sufficient to launch AHK scripts and execute Python scripts
 - **Build Environment:** AutoHotkey v2 installation with AHK2EXE compiler for creating distribution builds
+- **Distribution Environment:** No special requirements - compiled EXE includes all necessary path resolution logic
 
 ## Notes
 
 - Ensure all tools are added to the system PATH as needed.
 - For AI integration, ensure the MCP server is running and accessible.
 - **Build System:** Run `scripts/build_exe.ps1` to create standalone executable for distribution.
+- **Distribution Deployment:** Place compiled EXE in `/dist` directory to maintain proper relative path to Python scripts in `/src`
+- **Path Resolution:** Compiled EXE automatically handles locating Python backend scripts without requiring environment configuration
 - Future cross-platform support may require replacing the frontend layer.

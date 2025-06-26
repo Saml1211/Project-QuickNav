@@ -26,6 +26,13 @@ Project QuickNav has evolved from a three-tier navigation system into a comprehe
    - **Robust Error Handling**: Comprehensive feedback for missing dependencies
    - **Distribution Ready**: Creates `quicknav-{version}-win64.exe` for end-user deployment
 
+**CRITICAL: Distribution Path Resolution**
+   - **Intelligent Path Handling**: AutoHotkey script dynamically resolves Python backend location
+   - **Development Mode**: Looks for scripts in current directory (`/src` scenario)
+   - **Distribution Mode**: Uses relative path `../src/` when running from `/dist`
+   - **Fallback Strategy**: Multiple path attempts ensure compatibility across deployment scenarios
+   - **No Environment Dependencies**: Works without modifying PATH or installing Python scripts globally
+
 ### Advanced Analysis & Intelligence Layer
 
 5. **Hybrid Training Analyzer (`hybrid_training_analyzer.py`):**
@@ -43,6 +50,10 @@ Project QuickNav has evolved from a three-tier navigation system into a comprehe
 - **Stdout-based IPC (Inter-Process Communication):**  
   The Python backend communicates results via standard output, enabling robust and platform-neutral IPC. This choice maximizes compatibility and simplifies integration with both the AHK frontend and MCP server.
   **EXTENDED**: Now includes training data generation status messages and analysis results.
+
+- **Intelligent Path Resolution:**
+  AutoHotkey frontend implements dynamic path discovery for Python backend scripts, enabling both development (`/src`) and distribution (`/dist`) deployment modes without environment configuration.
+  **Benefits**: Simplifies deployment, eliminates PATH dependencies, maintains development workflow.
 
 - **Loose Coupling:**  
   Each component interacts only via clearly defined interfaces (CLI/stdout or MCP tools), minimizing dependencies and simplifying maintenance.
