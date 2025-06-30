@@ -1,0 +1,69 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Integration Plan – Merge MVP Refactor into `main`
+
+This rule documents the agreed-upon, eight-phase procedure for integrating the refactored MVP codebase back into the primary `Project-QuickNav` repository.
+
+---
+
+## PHASE 0 Preservation
+0.1 Check out the `Project-QuickNav-MVP` branch locally (or add the remote).
+0.2 Tag its current `HEAD` as **v1.0-mvp** and push the tag.
+
+## PHASE 1 Integration Branch
+1.1 Switch to `main` and pull latest.
+1.2 Create **integrate-mvp-refactor** from `main` and push it.
+
+## PHASE 2 Directory-Swap Import
+2.1 Delete legacy root-level `quicknav/` package and obsolete modules.
+2.2 Copy these from the MVP checkout into the repo root:
+  • `quicknav/` (refactored package)
+  • `mcp_server/`
+  • `src/` utilities (includes [find_project_path.py](mdc:find_project_path.py) & training data)
+  • `quicknav-1.0.0-win64.spec`
+  • Updated `.github/workflows/` files
+  • Helpful docs such as `file_organization_plan.md`
+2.3 Commit: **“feat: import MVP refactor (directory-swap)”**
+
+## PHASE 3 Asset Re-integration from Main
+3.1 Restore full AHK test suite `[tests/ahk](mdc:tests/ahk/)`.
+3.2 Restore debug helpers (`debug_helper.ahk`, `debug_quicknav.ahk`, etc.).
+3.3 Keep `setup.py`; adjust `packages=find_packages()` and include `training_data/`.
+3.4 Add `mcp[cli]` to `install_requires` or a root `requirements.txt`.
+3.5 Commit: **“chore: re-add tests, debug tools, update setup.py”**
+
+## PHASE 4 Import-Path & Code Fix-ups
+4.1 Install project in editable mode: `pip install -e .`.
+4.2 Run Python unit tests (`src/test_find_project_path.py`, `mcp_server/test_server.py`).
+4.3 Execute AHK suite via `tests/ahk/run_all_tests.ahk`.
+4.4 Patch any import/path errors.
+4.5 Commit: **“fix: align tests to new package versions”**
+
+## PHASE 5 Build System Consolidation
+5.1 Validate [`quicknav-1.0.0-win64.spec`](mdc:quicknav-1.0.0-win64.spec) against new tree; update `pathex` if needed.
+5.2 Confirm `scripts/build_exe.ps1` targets correct paths.
+5.3 Commit: **“build: PyInstaller spec validated for merged tree”**
+
+## PHASE 6 Continuous Integration
+6.1 Merge CI workflows:
+  • Retain MVP’s `build.yml`, `lint.yml`, `typecheck.yml`, `test.yml` unless better equivalents exist.
+  • Ensure Windows runner installs AutoHotkey for AHK tests.
+  • Add step to build PyInstaller artefact and upload.
+6.2 Commit: **“ci: unify workflows, run tests & build exe”**
+
+## PHASE 7 Pull Request & Sanity Check
+7.1 Run full local matrix (Python 3.10, 3.11).
+7.2 Push branch; open PR **integrate-mvp-refactor → main** summarising changes.
+7.3 Address feedback; squash/merge.
+7.4 Tag merged commit as **v1.1.0** (or next semantic version).
+
+## PHASE 8 Post-Merge Cleanup & Follow-ups
+8.1 Deprecate standalone MVP branch (tag already preserves history).
+8.2 Open issues for long-term tasks: migrate to `pyproject.toml`, expand unit tests, refactor AHK scripts, etc.
+
+---
+
+> **Purpose:** Keep future contributors aligned on the agreed workflow for consolidating the MVP refactor while preserving tests, debug tools, and CI pipelines.

@@ -7,5 +7,14 @@
   "AutoHotkey2.Diagnostics.Run": "Information",
   "AutoHotkey2.Diagnostics.UseUnknownFunc": "Ignore",
   "AutoHotkey2.Diagnostics.UseUnknownVarType": "Ignore",
-  "AutoHotkey2.Diagnostics.Deprecated": "Hint"
+  "AutoHotkey2.Diagnostics.Deprecated": "Hint",
+  "files.exclude": {
+    "**/.git": true,
+    "**/.svn": true,
+    "**/.hg": true,
+    "**/CVS": true,
+    "**/.DS_Store": true,
+    "**/Thumbs.db": true,
+    ".yoyo": true
+  }
 } 
