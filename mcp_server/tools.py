@@ -32,9 +32,9 @@ def navigate_project(project_number: str) -> dict:
         return result
 
     try:
-        # Call the script as a subprocess
+        # Call the script as a subprocess - script is now in src directory
         res = subprocess.run(
-            [sys.executable, "find_project_path.py", project_number],
+            [sys.executable, "../src/find_project_path.py", project_number],
             capture_output=True, text=True, check=True
         )
         output = res.stdout.strip()
@@ -72,6 +72,7 @@ def navigate_project(project_number: str) -> dict:
         entry["message"] = result["message"]
     user_data.add_history_entry(entry)
     return result
+
 @mcp.tool()
 @error_handler
 def list_projects() -> dict:
@@ -80,6 +81,7 @@ def list_projects() -> dict:
     """
     from mcp_server.resources import list_project_codes
     return list_project_codes()
+
 # === User Preferences and History Tools ===
 from mcp_server import user_data
 
