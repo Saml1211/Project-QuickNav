@@ -1,7 +1,7 @@
 ---
 description: 
 globs: 
-alwaysApply: false
+alwaysApply: true
 ---
 # Integration Plan – Merge MVP Refactor into `main`
 
@@ -29,7 +29,7 @@ This rule documents the agreed-upon, eight-phase procedure for integrating the r
 2.3 Commit: **“feat: import MVP refactor (directory-swap)”**
 
 ## PHASE 3 Asset Re-integration from Main
-3.1 Restore full AHK test suite `[tests/ahk](mdc:tests/ahk/)`.
+3.1 Restore full AHK test suite `[tests/ahk](mdc:tests/ahk)`.
 3.2 Restore debug helpers (`debug_helper.ahk`, `debug_quicknav.ahk`, etc.).
 3.3 Keep `setup.py`; adjust `packages=find_packages()` and include `training_data/`.
 3.4 Add `mcp[cli]` to `install_requires` or a root `requirements.txt`.
@@ -65,5 +65,6 @@ This rule documents the agreed-upon, eight-phase procedure for integrating the r
 8.2 Open issues for long-term tasks: migrate to `pyproject.toml`, expand unit tests, refactor AHK scripts, etc.
 
 ---
+
 
 > **Purpose:** Keep future contributors aligned on the agreed workflow for consolidating the MVP refactor while preserving tests, debug tools, and CI pipelines.
