@@ -1,0 +1,34 @@
+{
+  "mcpServers": {
+    "exa": {
+      "command": "cmd",
+      "args": [
+        "/c",
+        "npx",
+        "-y",
+        "@smithery/cli@latest",
+        "run",
+        "exa",
+        "--key",
+        "21c4fd21-fa7a-4aa4-9f17-5aaa1eb2ebc8",
+        "--profile",
+        "confused-lemur-DigfLO"
+      ]
+    },
+    "ref-tools-mcp": {
+      "command": "cmd",
+      "args": [
+        "/c",
+        "npx",
+        "-y",
+        "@smithery/cli@latest",
+        "run",
+        "@ref-tools/ref-tools-mcp",
+        "--key",
+        "21c4fd21-fa7a-4aa4-9f17-5aaa1eb2ebc8",
+        "--profile",
+        "confused-lemur-DigfLO"
+      ]
+    }
+  }
+}

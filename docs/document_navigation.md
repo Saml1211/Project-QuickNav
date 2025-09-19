@@ -65,7 +65,7 @@ quicknav doc 17741 --type lld --root "\\fileserver\projects"
 
 ### AutoHotkey GUI (Enhanced)
 
-1. **Launch**: Press `Ctrl+Alt+Q` or run `lld_navigator_enhanced.ahk`
+1. **Launch**: Press `Ctrl+Alt+Q` or run `lld_navigator.ahk`
 2. **Select Mode**: Choose "Find Documents" radio button
 3. **Enter Project**: Input 5-digit project number or search term
 4. **Document Type**: Select from dropdown (LLD, Change Orders, etc.)
