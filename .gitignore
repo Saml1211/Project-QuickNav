@@ -158,3 +158,6 @@ logs/
 # Backup files
 *.bak
 *.backup
+
+# Training data
+training_data/
