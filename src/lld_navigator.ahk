@@ -176,6 +176,10 @@ OpenProject(ctrl, info) {
         FileDelete(tempFile)
         output := Trim(output)
 
+        ; Split output into lines to separate status line from any logs (e.g., TRAINING messages)
+        lines := StrSplit(output, "`n")
+        statusLine := Trim(lines.Length >= 1 ? lines[1] : "")
+
         ; Show debug output if enabled
         if (DebugMode) {
             MsgBox("Raw Python output:`n`n" . output, "Debug Output", 64)
@@ -205,19 +209,19 @@ OpenProject(ctrl, info) {
             }
         }
 
-        ; Process the output from the Python script
-        if (InStr(output, "ERROR:") == 1) {
+        ; Process ONLY the first status line from the Python script
+        if (InStr(statusLine, "ERROR:") == 1) {
             ; Handle error response
-            msg := SubStr(output, 7)
+            msg := SubStr(statusLine, 7)
             mainGui["StatusText"].Value := "Error: " . Trim(msg)
             MsgBox(Trim(msg), "Error", 16)
             ResetGUI()
             return
         }
-        else if (InStr(output, "SELECT:") == 1) {
+        else if (InStr(statusLine, "SELECT:") == 1) {
             ; Handle multiple exact matches
             mainGui["StatusText"].Value := "Multiple paths found"
-            strPaths := SubStr(output, 8)
+            strPaths := SubStr(statusLine, 8)
             arrPaths := StrSplit(strPaths, "|")
 
             ; Create a selection dialog
@@ -267,10 +271,10 @@ OpenProject(ctrl, info) {
             chosenIdx := parts[1]
             MainProjectPath := arrPaths[chosenIdx]
         }
-        else if (InStr(output, "SEARCH:") == 1) {
+        else if (InStr(statusLine, "SEARCH:") == 1) {
             ; Handle search results (multiple matches from name search)
             mainGui["StatusText"].Value := "Search results found"
-            strPaths := SubStr(output, 8)
+            strPaths := SubStr(statusLine, 8)
             arrPaths := StrSplit(strPaths, "|")
 
             ; Create global variables for the search results GUI
@@ -369,9 +373,10 @@ OpenProject(ctrl, info) {
 
             MainProjectPath := searchResult
         }
-        else if (InStr(output, "SUCCESS:") == 1) {
+        else if (InStr(statusLine, "SUCCESS:") == 1) {
             ; Handle success response
-            MainProjectPath := Trim(SubStr(output, 9))
+            ; Extract path only from the SUCCESS line (ignore any subsequent lines)
+            MainProjectPath := Trim(SubStr(statusLine, 9))
         }
         else {
             ; Handle unexpected response

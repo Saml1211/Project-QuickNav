@@ -110,7 +110,6 @@ class TestMCPServerIntegration(unittest.TestCase):
         finally:
             tf.close()
             os.unlink(tf.name)
-class TestMCPServerIntegration(unittest.TestCase):
 
     # --- Tests for navigate_project tool ---
 
@@ -150,7 +149,7 @@ class TestMCPServerIntegration(unittest.TestCase):
 
         # Verify subprocess.run was called correctly
         mock_subprocess_run.assert_called_once_with(
-            [sys.executable, "find_project_path.py", proj_num],
+            [sys.executable, "../src/find_project_path.py", proj_num],
             capture_output=True, text=True, check=True
         )
         # Verify the output parsing
@@ -172,7 +171,7 @@ class TestMCPServerIntegration(unittest.TestCase):
         result = navigate_project(proj_num)
 
         mock_subprocess_run.assert_called_once_with(
-            [sys.executable, "find_project_path.py", proj_num],
+            [sys.executable, "../src/find_project_path.py", proj_num],
             capture_output=True, text=True, check=True
         )
         self.assertEqual(result["status"], "select")
@@ -192,7 +191,7 @@ class TestMCPServerIntegration(unittest.TestCase):
         result = navigate_project(proj_num)
 
         mock_subprocess_run.assert_called_once_with(
-            [sys.executable, "find_project_path.py", proj_num],
+            [sys.executable, "../src/find_project_path.py", proj_num],
             capture_output=True, text=True, check=True
         )
         self.assertEqual(result["status"], "error")
@@ -212,7 +211,7 @@ class TestMCPServerIntegration(unittest.TestCase):
         result = navigate_project(proj_num)
 
         mock_subprocess_run.assert_called_once_with(
-            [sys.executable, "find_project_path.py", proj_num],
+            [sys.executable, "../src/find_project_path.py", proj_num],
             capture_output=True, text=True, check=True
         )
         self.assertEqual(result["status"], "error")
@@ -225,13 +224,13 @@ class TestMCPServerIntegration(unittest.TestCase):
         error_stderr = "Traceback: file not found"
         # Simulate CalledProcessError being raised
         mock_subprocess_run.side_effect = subprocess.CalledProcessError(
-            returncode=1, cmd=["python", "find_project_path.py", proj_num], stderr=error_stderr
+            returncode=1, cmd=["python", "../src/find_project_path.py", proj_num], stderr=error_stderr
         )
 
         result = navigate_project(proj_num)
 
         mock_subprocess_run.assert_called_once_with(
-            [sys.executable, "find_project_path.py", proj_num],
+            [sys.executable, "../src/find_project_path.py", proj_num],
             capture_output=True, text=True, check=True
         )
         self.assertEqual(result["status"], "error")
@@ -312,7 +311,8 @@ class TestMCPServerIntegration(unittest.TestCase):
             list_project_folders()
 
         mock_getcwd.assert_called_once()
-# --- New tests: Error Handler and Project Listing ---
+
+    # --- New tests: Error Handler and Project Listing ---
 
     def test_error_handler_on_resource_exception(self):
         """Resource raising an exception should return standardized error dict (not raise)."""
