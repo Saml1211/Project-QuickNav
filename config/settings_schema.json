@@ -1,0 +1,358 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "QuickNav Settings Schema",
+  "description": "Configuration schema for Project QuickNav document navigation and ranking",
+  "type": "object",
+  "properties": {
+    "custom_roots": {
+      "description": "Alternative root directories to search for projects",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "description": "Path to a project root directory (supports environment variables)"
+      },
+      "examples": [
+        "%OneDrive%\\Project Files",
+        "%USERPROFILE%\\Documents\\Projects",
+        "\\\\fileserver\\Share\\Projects"
+      ],
+      "default": []
+    },
+    "doc_types": {
+      "description": "Document type configurations for classification and ranking",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["type", "label", "folders", "exts", "priority"],
+        "properties": {
+          "type": {
+            "type": "string",
+            "description": "Unique identifier for the document type"
+          },
+          "label": {
+            "type": "string",
+            "description": "Human-readable label for the document type"
+          },
+          "folders": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "Relative folder paths within projects where this type is found"
+          },
+          "exts": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "File extensions for this document type"
+          },
+          "name_includes_any": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "Filename patterns that indicate this document type"
+          },
+          "exclude_folders": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "Folder names to exclude when scanning for this type"
+          },
+          "version_patterns": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "Regex patterns for extracting version information"
+          },
+          "status_tags": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "Status indicators to look for in filenames"
+          },
+          "date_patterns": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "Regex patterns for extracting dates from filenames"
+          },
+          "room_key_regex": {
+            "type": "string",
+            "description": "Regex pattern for extracting room numbers"
+          },
+          "co_patterns": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "Regex patterns for extracting change order numbers"
+          },
+          "priority": {
+            "type": "number",
+            "description": "Priority for this document type (higher = more important)",
+            "minimum": 0,
+            "maximum": 1000
+          },
+          "thumbs": {
+            "type": "boolean",
+            "description": "Whether to generate thumbnail previews for this type",
+            "default": false
+          }
+        }
+      },
+      "default": [
+        {
+          "type": "lld",
+          "label": "Low-Level Design",
+          "folders": ["4. System Designs"],
+          "exts": [".vsdx", ".vsd", ".pdf"],
+          "name_includes_any": ["LLD", "Low Level"],
+          "exclude_folders": ["OLD DRAWINGS", "ARCHIVE"],
+          "version_patterns": ["REV\\s*(\\d+(?:\\.\\d+)?)", "\\((\\d+)\\)$", "_\\(([A-Z])\\)"],
+          "status_tags": ["AS-BUILT", "DRAFT", "FINAL"],
+          "date_patterns": ["(\\d{2}\\.\\d{2}\\.\\d{2})", "(\\d{6})", "Received\\s+(\\d{2}-\\d{2}-\\d{4})"],
+          "room_key_regex": "Room\\d+",
+          "priority": 100
+        },
+        {
+          "type": "hld",
+          "label": "High-Level Design",
+          "folders": ["4. System Designs"],
+          "exts": [".vsdx", ".vsd", ".pdf"],
+          "name_includes_any": ["HLD", "High Level"],
+          "exclude_folders": ["OLD DRAWINGS", "ARCHIVE"],
+          "version_patterns": ["REV\\s*(\\d+(?:\\.\\d+)?)", "\\((\\d+)\\)$", "_\\(([A-Z])\\)"],
+          "status_tags": ["AS-BUILT", "DRAFT", "FINAL"],
+          "date_patterns": ["(\\d{2}\\.\\d{2}\\.\\d{2})", "(\\d{6})"],
+          "room_key_regex": "Room\\d+",
+          "priority": 95
+        },
+        {
+          "type": "change_order",
+          "label": "Change Orders",
+          "folders": ["2. BOM & Orders", "2. BOM & Orders/Sales & Change Orders", "2. BOM & Orders/Sales & Change Orders/All COs"],
+          "exts": [".pdf"],
+          "name_includes_any": ["Change Order", "CO"],
+          "exclude_folders": ["ARCHIVE"],
+          "co_patterns": ["\\bCO\\s*(\\d+)\\b", "\\bChange Order\\s*(\\d+)\\b"],
+          "status_tags": ["APPROVED", "DRAFT", "SIGNED"],
+          "date_patterns": ["(\\d{2}\\.\\d{2}\\.\\d{2})", "(\\d{6})"],
+          "priority": 90
+        },
+        {
+          "type": "sales_po",
+          "label": "Sales and PO Reports",
+          "folders": ["2. BOM & Orders"],
+          "exts": [".pdf"],
+          "name_includes_any": ["Sales & PO Report"],
+          "date_patterns": ["(\\d{2}\\.\\d{2}\\.\\d{2})", "(\\d{6})"],
+          "priority": 80
+        },
+        {
+          "type": "floor_plans",
+          "label": "Floor Plans",
+          "folders": ["5. Floor Plans", "1. Sales Handover/Floor Plans"],
+          "exts": [".pdf"],
+          "name_includes_any": ["GA PLAN", "SHEET", "A-", "Floor Plan"],
+          "version_patterns": ["_\\(([A-Z])\\)", "REV\\s*([A-Z])"],
+          "room_key_regex": "Room\\d+",
+          "status_tags": ["AS-BUILT", "OLD"],
+          "exclude_folders": ["OLD DRAWINGS", "ARCHIVE"],
+          "priority": 85
+        },
+        {
+          "type": "scope",
+          "label": "Scope and Handover",
+          "folders": ["1. Sales Handover"],
+          "exts": [".pdf", ".docx"],
+          "name_includes_any": ["Project Handover Document", "Scope", "Proposal"],
+          "status_tags": ["FINAL", "DRAFT"],
+          "priority": 70
+        },
+        {
+          "type": "qa_itp",
+          "label": "QA and ITP Reports",
+          "folders": ["3. PMO", "QA-ITP Reports"],
+          "exts": [".pdf"],
+          "room_key_regex": "Room\\d+",
+          "status_tags": ["SIGNED", "FINAL"],
+          "priority": 75
+        },
+        {
+          "type": "swms",
+          "label": "SWMS",
+          "folders": ["3. PMO"],
+          "exts": [".pdf"],
+          "name_includes_any": ["SWMS"],
+          "version_patterns": ["v(\\d+(?:\\.\\d+)?)"],
+          "status_tags": ["SIGNED", "DRAFT"],
+          "priority": 78
+        },
+        {
+          "type": "supplier_quotes",
+          "label": "Supplier Quotes",
+          "folders": ["1. Sales Handover"],
+          "exts": [".pdf", ".xlsx"],
+          "name_includes_any": ["Quote", "Supplier"],
+          "status_tags": ["APPROVED", "FINAL"],
+          "priority": 65
+        },
+        {
+          "type": "photos",
+          "label": "Site Photos",
+          "folders": ["6. Site Photos"],
+          "exts": [".jpg", ".jpeg", ".png", ".heic", ".tiff"],
+          "thumbs": true,
+          "priority": 60
+        }
+      ]
+    },
+    "ranking_weights": {
+      "description": "Weights used for document ranking and selection",
+      "type": "object",
+      "properties": {
+        "match_project_code": {
+          "type": "number",
+          "description": "Bonus for documents that match the project code",
+          "default": 5.0
+        },
+        "in_preferred_folder": {
+          "type": "number",
+          "description": "Bonus for documents in their preferred folder",
+          "default": 2.0
+        },
+        "not_in_archive_or_old": {
+          "type": "number",
+          "description": "Bonus for non-archived documents",
+          "default": 1.5
+        },
+        "status_as_built": {
+          "type": "number",
+          "description": "Bonus for AS-BUILT status documents",
+          "default": 2.0
+        },
+        "status_signed": {
+          "type": "number",
+          "description": "Bonus for SIGNED status documents",
+          "default": 1.5
+        },
+        "status_draft": {
+          "type": "number",
+          "description": "Penalty for DRAFT status documents",
+          "default": -0.5
+        },
+        "archive_penalty": {
+          "type": "number",
+          "description": "Penalty for archived documents",
+          "default": -2.0
+        },
+        "newer_version": {
+          "type": "number",
+          "description": "Bonus multiplier for newer versions",
+          "default": 3.0
+        },
+        "newer_date": {
+          "type": "number",
+          "description": "Bonus for more recent dates",
+          "default": 1.0
+        },
+        "room_match": {
+          "type": "number",
+          "description": "Bonus for room-specific documents when room filter is used",
+          "default": 1.5
+        },
+        "ext_preference": {
+          "type": "number",
+          "description": "Bonus for preferred file extensions",
+          "default": 0.5
+        }
+      },
+      "default": {
+        "match_project_code": 5.0,
+        "in_preferred_folder": 2.0,
+        "not_in_archive_or_old": 1.5,
+        "status_as_built": 2.0,
+        "status_signed": 1.5,
+        "status_draft": -0.5,
+        "archive_penalty": -2.0,
+        "newer_version": 3.0,
+        "newer_date": 1.0,
+        "room_match": 1.5,
+        "ext_preference": 0.5
+      }
+    },
+    "date_parse_defaults": {
+      "description": "Default settings for date parsing",
+      "type": "object",
+      "properties": {
+        "day_first": {
+          "type": "boolean",
+          "description": "Whether to interpret ambiguous dates as DD/MM/YY (true) or MM/DD/YY (false)",
+          "default": true
+        },
+        "y2k_window": {
+          "type": "integer",
+          "description": "Cutoff year for 2-digit year interpretation (years below this become 20xx)",
+          "default": 1970,
+          "minimum": 1900,
+          "maximum": 2050
+        }
+      }
+    },
+    "gui_settings": {
+      "description": "GUI-specific settings",
+      "type": "object",
+      "properties": {
+        "auto_hide_delay": {
+          "type": "number",
+          "description": "Seconds to wait before auto-hiding GUI after successful operation",
+          "default": 1.5,
+          "minimum": 0,
+          "maximum": 10
+        },
+        "dpi_scaling": {
+          "type": "boolean",
+          "description": "Enable automatic DPI scaling for high-resolution displays",
+          "default": true
+        },
+        "thumbnail_size": {
+          "type": "integer",
+          "description": "Maximum size for thumbnail previews in pixels",
+          "default": 100,
+          "minimum": 50,
+          "maximum": 300
+        },
+        "max_search_results": {
+          "type": "integer",
+          "description": "Maximum number of search results to display",
+          "default": 20,
+          "minimum": 5,
+          "maximum": 100
+        }
+      }
+    },
+    "performance": {
+      "description": "Performance tuning settings",
+      "type": "object",
+      "properties": {
+        "max_scan_depth": {
+          "type": "integer",
+          "description": "Maximum directory depth to scan",
+          "default": 5,
+          "minimum": 2,
+          "maximum": 10
+        },
+        "scan_timeout": {
+          "type": "number",
+          "description": "Maximum time in seconds to spend scanning directories",
+          "default": 30.0,
+          "minimum": 5.0,
+          "maximum": 120.0
+        },
+        "cache_enabled": {
+          "type": "boolean",
+          "description": "Enable caching of scan results",
+          "default": true
+        },
+        "cache_duration": {
+          "type": "integer",
+          "description": "Cache duration in minutes",
+          "default": 60,
+          "minimum": 5,
+          "maximum": 1440
+        }
+      }
+    }
+  },
+  "additionalProperties": false
+}
