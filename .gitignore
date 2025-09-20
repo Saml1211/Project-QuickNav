@@ -161,3 +161,4 @@ logs/
 
 # Training data
 training_data/
+.kilocode/mcp.json

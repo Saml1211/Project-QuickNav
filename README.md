@@ -40,7 +40,7 @@ Project QuickNav is a utility designed to streamline navigation, access, and con
 ### 1. Clone the Repository
 
 ```sh
-git clone <repo-url>
+git clone https://github.com/Saml1211/Project-QuickNav.git
 cd Project-QuickNav
 ```
 

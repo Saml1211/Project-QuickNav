@@ -31,7 +31,55 @@ Keyboard Shortcuts:
     - Escape: Close/hide window
 */
 
+; moved helpers below #Requires
 #Requires AutoHotkey v2.0
+
+; Helper function to enable/disable window redraw to prevent flicker
+SetRedraw(hwnd, on := true) {
+    static WM_SETREDRAW := 0x000B
+    DllCall("User32\SendMessage", "ptr", hwnd, "uint", WM_SETREDRAW, "ptr", on, "ptr", 0)
+    if (on) {
+        ; Force immediate redraw of window and all child controls so nothing appears invisible
+        static RDW_INVALIDATE := 0x0001, RDW_ERASE := 0x0004, RDW_ALLCHILDREN := 0x0080, RDW_UPDATENOW := 0x0100, RDW_FRAME := 0x0400
+        flags := RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN | RDW_UPDATENOW | RDW_FRAME
+        DllCall("User32\RedrawWindow", "ptr", hwnd, "ptr", 0, "ptr", 0, "uint", flags)
+    }
+}
+
+; Helper function to calculate minimum client area size based on visible controls
+CalcMinClient(panelCtrls, padX := 20, padY := 20, extraCtrls := "") {
+    global dpiScale
+    maxX := 0, maxY := 0
+
+    ; Add padding based on DPI scale
+    padX := Round(padX * dpiScale)
+    padY := Round(padY * dpiScale)
+
+    ; Iterate through base controls to find maximum extents
+    if IsObject(panelCtrls) {
+        for ctrl in panelCtrls {
+            if (IsObject(ctrl) && ctrl.Visible) {
+                ctrl.GetPos(&x, &y, &w, &h)
+                maxX := Max(maxX, x + w)
+                maxY := Max(maxY, y + h)
+            }
+        }
+    }
+
+    ; Include any extra controls (e.g., options/status/buttons at the bottom)
+    if (IsObject(extraCtrls)) {
+        for ctrl in extraCtrls {
+            if (IsObject(ctrl) && ctrl.Visible) {
+                ctrl.GetPos(&x, &y, &w, &h)
+                maxX := Max(maxX, x + w)
+                maxY := Max(maxY, y + h)
+            }
+        }
+    }
+
+    ; Return minimum width and height with padding
+    return [maxX + padX, maxY + padY]
+}
 try DllCall("User32\SetProcessDpiAwarenessContext", "ptr", -4)  ; DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2
 #SingleInstance Force
 
@@ -255,6 +303,10 @@ CreateMainGui() {
     ; Start in Folder mode: hide document controls so they don't overlap
     for ctrl in mainGui.docCtrls
         ctrl.Visible := false
+    
+    ; Calculate and set initial minimum size based on folder controls
+    minSize := CalcMinClient(mainGui.folderCtrls, 20, 20, [mainGui.optionsGroup, mainGui.statusText, mainGui.openBtn])
+    mainGui.MinSize := minSize[1] "x" minSize[2]
 }
 
 SwitchToFolderMode() {
@@ -278,6 +330,10 @@ SwitchToFolderMode() {
         MainGuiSize(mainGui, 0, w, h)
     } catch {
     }
+    
+    ; Recalculate minimum size based on folder controls
+    minSize := CalcMinClient(mainGui.folderCtrls, 20, 20, [mainGui.optionsGroup, mainGui.statusText, mainGui.openBtn])
+    mainGui.MinSize := minSize[1] "x" minSize[2]
     
     UpdateStatus("Folder mode - Select a project subfolder to open")
 }
@@ -303,6 +359,10 @@ SwitchToDocumentMode() {
         MainGuiSize(mainGui, 0, w, h)
     } catch {
     }
+    
+    ; Recalculate minimum size based on document controls
+    minSize := CalcMinClient(mainGui.docCtrls, 20, 20, [mainGui.optionsGroup, mainGui.statusText, mainGui.findBtn, mainGui.chooseBtn])
+    mainGui.MinSize := minSize[1] "x" minSize[2]
     
     UpdateStatus("Document mode - Find specific documents by type and filters")
 }
@@ -882,6 +942,7 @@ SearchGuiSize(thisGui, MinMax, Width, Height) {
     if (MinMax = -1)  ; Minimized
         return
 
+    SetRedraw(thisGui.Hwnd, false)
     try {
         ; Resize ListView to fit new window size
         margin := Round(15 * dpiScale)
@@ -898,6 +959,8 @@ SearchGuiSize(thisGui, MinMax, Width, Height) {
 
     } catch as e {
         ; Ignore resize errors
+    } finally {
+        SetRedraw(thisGui.Hwnd, true)
     }
 }
 
@@ -1046,6 +1109,7 @@ DocGuiSize(thisGui, MinMax, Width, Height) {
     if (MinMax = -1)  ; Minimized
         return
 
+    SetRedraw(thisGui.Hwnd, false)
     try {
         ; Resize ListView to fit new window size
         margin := Round(15 * dpiScale)
@@ -1062,6 +1126,8 @@ DocGuiSize(thisGui, MinMax, Width, Height) {
 
     } catch as e {
         ; Ignore resize errors
+    } finally {
+        SetRedraw(thisGui.Hwnd, true)
     }
 }
 
@@ -1434,6 +1500,9 @@ MainGuiSize(thisGui, MinMax, Width, Height) {
     global mainGui, dpiScale
     if (MinMax = -1)
         return
+    
+    ; Disable redraw to prevent flicker during layout adjustment
+    SetRedraw(thisGui.Hwnd, false)
     try {
         ; Fallback if event did not pass client size
         if (!Width || !Height) {
@@ -1590,6 +1659,9 @@ MainGuiSize(thisGui, MinMax, Width, Height) {
         }
     } catch {
         ; Ignore layout errors to prevent flicker during live resize
+    } finally {
+        ; Re-enable redraw after layout adjustment
+        SetRedraw(thisGui.Hwnd, true)
     }
 }
 
