@@ -42,12 +42,20 @@ try:
     from .gui_settings import SettingsManager
     from .gui_theme import ThemeManager
     from .gui_widgets import *
+    from .ai_client import AIClient
+    from .ai_chat_widget import ChatWidget as AIChatWidget
 except ImportError:
     # Fallback imports for development
     from gui_controller import GuiController
     from gui_settings import SettingsManager
     from gui_theme import ThemeManager
     from gui_widgets import *
+    try:
+        from ai_client import AIClient
+        from ai_chat_widget import ChatWidget as AIChatWidget
+    except ImportError:
+        AIClient = None
+        AIChatWidget = None
 
 
 class ProjectQuickNavGUI:
@@ -89,6 +97,15 @@ class ProjectQuickNavGUI:
         self.task_queue = queue.Queue()
         self.result_queue = queue.Queue()
 
+        # AI components
+        self.ai_client = None
+        self.ai_chat_widget = None
+        self.ai_enabled = tk.BooleanVar()
+        self.ai_panel_visible = tk.BooleanVar(value=False)
+
+        # Initialize AI if enabled
+        self._initialize_ai()
+
         # Initialize UI
         self._setup_ui()
         self._setup_events()
@@ -97,6 +114,9 @@ class ProjectQuickNavGUI:
 
         # Start task processor
         self._start_task_processor()
+
+        # Update AI UI
+        self._update_ai_ui()
 
         logger.info("ProjectQuickNavGUI initialized successfully")
 
@@ -113,13 +133,14 @@ class ProjectQuickNavGUI:
 
         # Configure grid weights for responsive layout
         self.main_frame.columnconfigure(0, weight=1)
-        self.main_frame.rowconfigure(6, weight=1)  # Status area gets extra space
+        self.main_frame.rowconfigure(7, weight=1)  # Status area gets extra space
 
         self._create_project_input_section()
         self._create_navigation_mode_section()
         self._create_folder_mode_section()
         self._create_document_mode_section()
         self._create_options_section()
+        self._create_toolbar()
         self._create_status_section()
         self._create_action_buttons()
         self._create_menu_bar()
@@ -325,11 +346,44 @@ class ProjectQuickNavGUI:
         )
         self.training_check.pack(side="left", padx=(20, 0))
 
+    def _create_toolbar(self):
+        """Create toolbar with AI controls."""
+        # Toolbar frame
+        toolbar_frame = ttk.Frame(self.main_frame)
+        toolbar_frame.grid(row=5, column=0, sticky="ew", pady=(0, 15))
+
+        # AI controls section
+        ai_frame = ttk.LabelFrame(toolbar_frame, text="AI Assistant")
+        ai_frame.pack(fill=tk.X, padx=5, pady=5)
+
+        # AI toggle button
+        self.ai_toggle_button = ttk.Button(
+            ai_frame,
+            text="Enable AI",
+            command=self.toggle_ai,
+            width=12
+        )
+        self.ai_toggle_button.pack(side=tk.LEFT, padx=5, pady=5)
+
+        # AI chat button
+        self.ai_chat_button = ttk.Button(
+            ai_frame,
+            text="AI Chat",
+            command=self.toggle_ai_panel,
+            width=12,
+            state=tk.DISABLED
+        )
+        self.ai_chat_button.pack(side=tk.LEFT, padx=5, pady=5)
+
+        # AI status indicator
+        self.ai_status_label = ttk.Label(ai_frame, text="AI: Disabled", foreground="red")
+        self.ai_status_label.pack(side=tk.LEFT, padx=(10, 5), pady=5)
+
     def _create_status_section(self):
         """Create status section."""
         # Status frame
         status_frame = ttk.Frame(self.main_frame)
-        status_frame.grid(row=5, column=0, sticky="ew", pady=(0, 15))
+        status_frame.grid(row=6, column=0, sticky="ew", pady=(0, 15))
         status_frame.columnconfigure(0, weight=1)
 
         # Status label
@@ -353,7 +407,7 @@ class ProjectQuickNavGUI:
         """Create action buttons."""
         # Button frame
         button_frame = ttk.Frame(self.main_frame)
-        button_frame.grid(row=6, column=0, sticky="ew", pady=(0, 0))
+        button_frame.grid(row=7, column=0, sticky="ew", pady=(0, 0))
 
         # Center the buttons
         button_container = ttk.Frame(button_frame)
@@ -400,6 +454,22 @@ class ProjectQuickNavGUI:
         menubar.add_cascade(label="View", menu=view_menu)
         view_menu.add_command(label="Toggle Theme", command=self.toggle_theme)
         view_menu.add_command(label="Always on Top", command=self.toggle_always_on_top)
+
+        # AI menu
+        ai_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="AI", menu=ai_menu)
+        ai_menu.add_checkbutton(
+            label="Enable AI Assistant",
+            variable=self.ai_enabled,
+            command=self.toggle_ai
+        )
+        ai_menu.add_checkbutton(
+            label="Show AI Chat Panel",
+            variable=self.ai_panel_visible,
+            command=self.toggle_ai_panel
+        )
+        ai_menu.add_separator()
+        ai_menu.add_command(label="AI Settings...", command=self.show_ai_settings)
 
         # Help menu
         help_menu = tk.Menu(menubar, tearoff=0)
@@ -854,17 +924,145 @@ class ProjectQuickNavGUI:
         dialog = SettingsDialog(self.root, self.settings)
         dialog.show()
 
+    def show_ai_settings(self):
+        """Show AI settings dialog."""
+        from .gui_settings import SettingsDialog
+        dialog = SettingsDialog(self.root, self.settings)
+        # Switch to AI tab if available
+        dialog.show()
+
+    def _initialize_ai(self):
+        """Initialize AI components if enabled."""
+        if AIClient is None or AIChatWidget is None:
+            self.ai_enabled.set(False)
+            return
+
+        # Check if AI is enabled in settings
+        ai_enabled = self.settings.get("ai.enabled", False)
+        self.ai_enabled.set(ai_enabled)
+
+        if ai_enabled:
+            try:
+                # Initialize AI client
+                self.ai_client = AIClient(controller=self.controller, settings=self.settings)
+                logger.info("AI client initialized successfully")
+            except Exception as e:
+                logger.error(f"Failed to initialize AI client: {e}")
+                self.ai_enabled.set(False)
+
+    def toggle_ai(self):
+        """Toggle AI assistant on/off."""
+        if self.ai_enabled.get():
+            if self.ai_client is None:
+                self._initialize_ai()
+
+            if self.ai_client is None:
+                messagebox.showerror(
+                    "AI Error",
+                    "Failed to initialize AI assistant. Please check your settings."
+                )
+                self.ai_enabled.set(False)
+                self._update_ai_ui()
+                return
+
+            # Create AI chat widget if not exists
+            if self.ai_chat_widget is None:
+                self._create_ai_chat_panel()
+
+            # Update UI
+            self._update_ai_ui()
+            self.status_text.set("AI Assistant enabled")
+        else:
+            # Hide AI panel if visible
+            if self.ai_panel_visible.get():
+                self.toggle_ai_panel()
+
+            # Update UI
+            self._update_ai_ui()
+            self.status_text.set("AI Assistant disabled")
+
+    def _update_ai_ui(self):
+        """Update AI-related UI elements."""
+        if hasattr(self, 'ai_toggle_button'):
+            if self.ai_enabled.get():
+                self.ai_toggle_button.config(text="Disable AI")
+                self.ai_chat_button.config(state=tk.NORMAL)
+                self.ai_status_label.config(text="AI: Enabled", foreground="green")
+            else:
+                self.ai_toggle_button.config(text="Enable AI")
+                self.ai_chat_button.config(state=tk.DISABLED)
+                self.ai_status_label.config(text="AI: Disabled", foreground="red")
+
+    def toggle_ai_panel(self):
+        """Toggle AI chat panel visibility."""
+        if not self.ai_enabled.get():
+            messagebox.showwarning(
+                "AI Not Enabled",
+                "Please enable AI Assistant first from the AI menu."
+            )
+            self.ai_panel_visible.set(False)
+            return
+
+        if self.ai_panel_visible.get():
+            self._show_ai_panel()
+        else:
+            self._hide_ai_panel()
+
+    def _create_ai_chat_panel(self):
+        """Create AI chat panel as a separate window."""
+        if self.ai_chat_widget is not None:
+            return
+
+        # Create chat window
+        self.ai_chat_window = tk.Toplevel(self.root)
+        self.ai_chat_window.title("AI Assistant")
+        self.ai_chat_window.geometry("400x500")
+        self.ai_chat_window.transient(self.root)
+
+        # Apply theme to chat window
+        self.theme.apply_theme(self.ai_chat_window)
+
+        # Create chat widget
+        self.ai_chat_widget = AIChatWidget(
+            self.ai_chat_window,
+            ai_client=self.ai_client
+        )
+        self.ai_chat_widget.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+
+        # Handle window close
+        self.ai_chat_window.protocol("WM_DELETE_WINDOW", self._on_chat_window_close)
+
+    def _show_ai_panel(self):
+        """Show AI chat panel."""
+        if self.ai_chat_widget is None:
+            self._create_ai_chat_panel()
+
+        if hasattr(self, 'ai_chat_window'):
+            self.ai_chat_window.deiconify()
+            self.ai_chat_window.lift()
+
+    def _hide_ai_panel(self):
+        """Hide AI chat panel."""
+        if hasattr(self, 'ai_chat_window'):
+            self.ai_chat_window.withdraw()
+
+    def _on_chat_window_close(self):
+        """Handle AI chat window close."""
+        self.ai_panel_visible.set(False)
+        self._hide_ai_panel()
+
     def show_about(self):
         """Show about dialog."""
         about_text = """Project QuickNav - Enhanced GUI
 
 Version: 2.0.0
 A comprehensive project navigation tool with enhanced
-document search and cross-platform compatibility.
+document search, AI assistance, and cross-platform compatibility.
 
 Features:
 • Project folder navigation
 • Advanced document search
+• AI-powered assistance and chat
 • Training data generation
 • Theme customization
 • Global hotkey support

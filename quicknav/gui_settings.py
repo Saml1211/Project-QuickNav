@@ -77,6 +77,18 @@ class SettingsManager:
                 "debug_mode": False,
                 "training_data_enabled": False,
                 "auto_backup_settings": True
+            },
+            "ai": {
+                "enabled": True,
+                "default_model": "gpt-3.5-turbo",
+                "api_keys": {},
+                "max_conversation_history": 50,
+                "temperature": 0.7,
+                "max_tokens": 1000,
+                "tool_execution_enabled": True,
+                "auto_suggestions": True,
+                "conversation_memory": True,
+                "custom_endpoints": {}
             }
         }
 
@@ -374,6 +386,7 @@ class SettingsDialog:
         self._create_paths_tab()
         self._create_theme_tab()
         self._create_hotkeys_tab()
+        self._create_ai_tab()
         self._create_advanced_tab()
 
         # Button frame
@@ -625,6 +638,259 @@ class SettingsDialog:
         )
         warning_label.pack(pady=10)
 
+    def _create_ai_tab(self):
+        """Create AI settings tab."""
+        frame = ttk.Frame(self.notebook)
+        self.notebook.add(frame, text="AI Assistant")
+
+        # AI Enable/Disable
+        ai_group = ttk.LabelFrame(frame, text="AI Assistant Settings")
+        ai_group.pack(fill=tk.X, padx=10, pady=10)
+
+        # Enable AI
+        self.ai_enabled_var = tk.BooleanVar()
+        self.ai_enabled_var.set(self.settings.get("ai.enabled", True))
+        ttk.Checkbutton(
+            ai_group,
+            text="Enable AI Assistant",
+            variable=self.ai_enabled_var
+        ).pack(anchor=tk.W, padx=10, pady=5)
+
+        # Model selection
+        model_frame = ttk.Frame(ai_group)
+        model_frame.pack(fill=tk.X, padx=10, pady=5)
+
+        ttk.Label(model_frame, text="AI Model:").pack(side=tk.LEFT)
+        self.ai_model_var = tk.StringVar()
+        self.ai_model_var.set(self.settings.get("ai.default_model", "gpt-3.5-turbo"))
+
+        models = [
+            "gpt-4", "gpt-4-turbo-preview", "gpt-3.5-turbo", "gpt-3.5-turbo-16k",
+            "claude-3-opus-20240229", "claude-3-sonnet-20240229", "claude-3-haiku-20240307",
+            "azure/gpt-4", "azure/gpt-35-turbo",
+            "ollama/llama2", "ollama/codellama", "ollama/mistral"
+        ]
+
+        model_combo = ttk.Combobox(
+            model_frame,
+            textvariable=self.ai_model_var,
+            values=models,
+            state="readonly",
+            width=25
+        )
+        model_combo.pack(side=tk.LEFT, padx=(10, 0))
+
+        # API Keys section
+        api_group = ttk.LabelFrame(frame, text="API Configuration")
+        api_group.pack(fill=tk.X, padx=10, pady=10)
+
+        # OpenAI API Key
+        openai_frame = ttk.Frame(api_group)
+        openai_frame.pack(fill=tk.X, padx=10, pady=2)
+
+        ttk.Label(openai_frame, text="OpenAI API Key:", width=15).pack(side=tk.LEFT)
+        self.openai_key_var = tk.StringVar()
+        self.openai_key_var.set(self.settings.get("ai.api_keys.openai", ""))
+        openai_entry = ttk.Entry(
+            openai_frame,
+            textvariable=self.openai_key_var,
+            show="*",
+            width=40
+        )
+        openai_entry.pack(side=tk.LEFT, padx=(10, 0), fill=tk.X, expand=True)
+
+        # Anthropic API Key
+        anthropic_frame = ttk.Frame(api_group)
+        anthropic_frame.pack(fill=tk.X, padx=10, pady=2)
+
+        ttk.Label(anthropic_frame, text="Anthropic API Key:", width=15).pack(side=tk.LEFT)
+        self.anthropic_key_var = tk.StringVar()
+        self.anthropic_key_var.set(self.settings.get("ai.api_keys.anthropic", ""))
+        anthropic_entry = ttk.Entry(
+            anthropic_frame,
+            textvariable=self.anthropic_key_var,
+            show="*",
+            width=40
+        )
+        anthropic_entry.pack(side=tk.LEFT, padx=(10, 0), fill=tk.X, expand=True)
+
+        # Azure API Key
+        azure_frame = ttk.Frame(api_group)
+        azure_frame.pack(fill=tk.X, padx=10, pady=2)
+
+        ttk.Label(azure_frame, text="Azure API Key:", width=15).pack(side=tk.LEFT)
+        self.azure_key_var = tk.StringVar()
+        self.azure_key_var.set(self.settings.get("ai.api_keys.azure", ""))
+        azure_entry = ttk.Entry(
+            azure_frame,
+            textvariable=self.azure_key_var,
+            show="*",
+            width=40
+        )
+        azure_entry.pack(side=tk.LEFT, padx=(10, 0), fill=tk.X, expand=True)
+
+        # Conversation settings
+        conv_group = ttk.LabelFrame(frame, text="Conversation Settings")
+        conv_group.pack(fill=tk.X, padx=10, pady=10)
+
+        # Max conversation history
+        history_frame = ttk.Frame(conv_group)
+        history_frame.pack(fill=tk.X, padx=10, pady=2)
+
+        ttk.Label(history_frame, text="Max conversation history:").pack(side=tk.LEFT)
+        self.max_history_var = tk.StringVar()
+        self.max_history_var.set(str(self.settings.get("ai.max_conversation_history", 50)))
+        ttk.Entry(
+            history_frame,
+            textvariable=self.max_history_var,
+            width=10
+        ).pack(side=tk.LEFT, padx=(10, 0))
+
+        # Temperature
+        temp_frame = ttk.Frame(conv_group)
+        temp_frame.pack(fill=tk.X, padx=10, pady=2)
+
+        ttk.Label(temp_frame, text="Temperature (0.0-2.0):").pack(side=tk.LEFT)
+        self.temperature_var = tk.StringVar()
+        self.temperature_var.set(str(self.settings.get("ai.temperature", 0.7)))
+        ttk.Entry(
+            temp_frame,
+            textvariable=self.temperature_var,
+            width=10
+        ).pack(side=tk.LEFT, padx=(10, 0))
+
+        # Max tokens
+        tokens_frame = ttk.Frame(conv_group)
+        tokens_frame.pack(fill=tk.X, padx=10, pady=2)
+
+        ttk.Label(tokens_frame, text="Max tokens per response:").pack(side=tk.LEFT)
+        self.max_tokens_var = tk.StringVar()
+        self.max_tokens_var.set(str(self.settings.get("ai.max_tokens", 1000)))
+        ttk.Entry(
+            tokens_frame,
+            textvariable=self.max_tokens_var,
+            width=10
+        ).pack(side=tk.LEFT, padx=(10, 0))
+
+        # Feature toggles
+        features_group = ttk.LabelFrame(frame, text="Features")
+        features_group.pack(fill=tk.X, padx=10, pady=10)
+
+        # Tool execution
+        self.tool_execution_var = tk.BooleanVar()
+        self.tool_execution_var.set(self.settings.get("ai.tool_execution_enabled", True))
+        ttk.Checkbutton(
+            features_group,
+            text="Enable tool execution (project search, document analysis)",
+            variable=self.tool_execution_var
+        ).pack(anchor=tk.W, padx=10, pady=2)
+
+        # Auto suggestions
+        self.auto_suggestions_var = tk.BooleanVar()
+        self.auto_suggestions_var.set(self.settings.get("ai.auto_suggestions", True))
+        ttk.Checkbutton(
+            features_group,
+            text="Enable auto-suggestions",
+            variable=self.auto_suggestions_var
+        ).pack(anchor=tk.W, padx=10, pady=2)
+
+        # Conversation memory
+        self.conversation_memory_var = tk.BooleanVar()
+        self.conversation_memory_var.set(self.settings.get("ai.conversation_memory", True))
+        ttk.Checkbutton(
+            features_group,
+            text="Remember conversation context",
+            variable=self.conversation_memory_var
+        ).pack(anchor=tk.W, padx=10, pady=2)
+
+        # Test connection button
+        test_frame = ttk.Frame(frame)
+        test_frame.pack(fill=tk.X, padx=10, pady=10)
+
+        ttk.Button(
+            test_frame,
+            text="Test AI Connection",
+            command=self._test_ai_connection,
+            width=20
+        ).pack()
+
+    def _test_ai_connection(self):
+        """Test AI connection with current settings."""
+        try:
+            from quicknav.ai_client import AIClient
+
+            # Get current settings from the form
+            model = self.model_var.get()
+            openai_key = self.openai_key_var.get().strip()
+            anthropic_key = self.anthropic_key_var.get().strip()
+            azure_key = self.azure_key_var.get().strip()
+
+            if not model:
+                messagebox.showwarning("Test Failed", "Please select a model first.")
+                return
+
+            # Create temporary AI client with test settings
+            test_settings = {
+                'ai': {
+                    'enabled': True,
+                    'default_model': model,
+                    'api_keys': {
+                        'openai': openai_key,
+                        'anthropic': anthropic_key,
+                        'azure': azure_key
+                    },
+                    'temperature': float(self.temperature_var.get()),
+                    'max_tokens': int(self.max_tokens_var.get())
+                }
+            }
+
+            # Create a simple settings object for testing
+            class TestSettings:
+                def __init__(self, data):
+                    self.data = data
+                def get(self, key, default=None):
+                    keys = key.split('.')
+                    value = self.data
+                    for k in keys:
+                        if isinstance(value, dict) and k in value:
+                            value = value[k]
+                        else:
+                            return default
+                    return value
+
+            test_settings_obj = TestSettings(test_settings)
+            ai_client = AIClient(settings=test_settings_obj)
+
+            # Test with a simple message
+            response = ai_client.send_message("Hello, this is a connection test.")
+
+            if response and response.get('content'):
+                messagebox.showinfo(
+                    "Test Successful",
+                    f"AI connection test successful!\n\nModel: {model}\nResponse: {response['content'][:100]}..."
+                )
+            else:
+                messagebox.showwarning("Test Failed", "AI responded but with empty content.")
+
+        except ImportError:
+            messagebox.showerror(
+                "Test Failed",
+                "AI client module not available. Please ensure all dependencies are installed."
+            )
+        except Exception as e:
+            messagebox.showerror("Test Failed", f"Connection test failed:\n{str(e)}")
+
+    def _on_model_change(self, *args):
+        """Handle model selection change."""
+        model = self.model_var.get()
+        # Enable/disable API key fields based on model
+        if model.startswith('gpt-') or model.startswith('o1-'):
+            self.openai_key_entry.config(state='normal')
+        elif model.startswith('claude-'):
+            self.anthropic_key_entry.config(state='normal')
+        elif model.startswith('azure-'):
+            self.azure_key_entry.config(state='normal')
+
     def _create_advanced_tab(self):
         """Create advanced settings tab."""
         frame = ttk.Frame(self.notebook)
@@ -816,6 +1082,20 @@ class SettingsDialog:
         self.settings.set("advanced.debug_mode", self.debug_mode_var.get())
         self.settings.set("advanced.training_data_enabled", self.training_data_var.get())
         self.settings.set("advanced.auto_backup_settings", self.auto_backup_var.get())
+
+        # Update AI settings if they exist (AI tab may not be created yet)
+        if hasattr(self, 'ai_enabled_var'):
+            self.settings.set("ai.enabled", self.ai_enabled_var.get())
+            self.settings.set("ai.default_model", self.model_var.get())
+            self.settings.set("ai.api_keys.openai", self.openai_key_var.get())
+            self.settings.set("ai.api_keys.anthropic", self.anthropic_key_var.get())
+            self.settings.set("ai.api_keys.azure", self.azure_key_var.get())
+            self.settings.set("ai.max_conversation_history", int(self.max_history_var.get() or 50))
+            self.settings.set("ai.temperature", float(self.temperature_var.get() or 0.7))
+            self.settings.set("ai.max_tokens", int(self.max_tokens_var.get() or 1000))
+            self.settings.set("ai.enable_tool_execution", self.tool_execution_var.get())
+            self.settings.set("ai.enable_auto_suggestions", self.auto_suggestions_var.get())
+            self.settings.set("ai.enable_conversation_memory", self.conversation_memory_var.get())
 
         self.changes_made = True
 
