@@ -46,6 +46,25 @@ SetRedraw(hwnd, on := true) {
     }
 }
 
+; Resolve an absolute, normalized Windows path (helper used for Run/RunWait working dirs and script paths)
+NormalizePath(path) {
+    try {
+        ; Use WinAPI GetFullPathNameW to normalize paths like .. and .
+        bufSize := 32768
+        buf := Buffer(bufSize * 2, 0)
+        size := DllCall("GetFullPathNameW", "wstr", path, "uint", bufSize, "ptr", buf.Ptr, "ptr", 0, "uint")
+        if (size) {
+            normalized := StrGet(buf.Ptr, "UTF-16")
+            ; Ensure backslashes
+            return StrReplace(normalized, "/", "\")
+        }
+    } catch {
+        ; fall through
+    }
+    ; Fallback: just standardize separators
+    return StrReplace(path, "/", "\")
+}
+
 ; Helper function to calculate minimum client area size based on visible controls
 CalcMinClient(panelCtrls, padX := 20, padY := 20, extraCtrls := "") {
     global dpiScale
@@ -250,8 +269,8 @@ CreateMainGui() {
     chooseBtn := mainGui.Add("Button", Format("x{} y{} w{} h{} vChooseBtn Hidden", btnStartX + btnWidth + btnSpacing, currentY, btnWidth, btnHeight), "Choose From List")
 
     ; Set up event handlers
-    folderModeRadio.OnEvent("Click", (*) => SwitchToFolderMode())
-    docModeRadio.OnEvent("Click", (*) => SwitchToDocumentMode())
+    folderModeRadio.OnEvent("Click", (*) => SwitchMode("folder"))
+    docModeRadio.OnEvent("Click", (*) => SwitchMode("document"))
     openBtn.OnEvent("Click", (*) => ExecuteProjectNavigation())
     findBtn.OnEvent("Click", (*) => ExecuteDocumentNavigation())
     chooseBtn.OnEvent("Click", (*) => ExecuteDocumentNavigation(true))
@@ -309,20 +328,22 @@ CreateMainGui() {
     mainGui.MinSize := minSize[1] "x" minSize[2]
 }
 
-SwitchToFolderMode() {
+SwitchMode(mode) {
     global mainGui
-    
-    ; Show folder selection, hide document options
-    mainGui.folderGroup.Visible := true
-    mainGui.docGroup.Visible := false
-    mainGui.openBtn.Visible := true
-    mainGui.findBtn.Visible := false
-    mainGui.chooseBtn.Visible := false
-        ; Toggle panel controls
+    isDocMode := (mode = "document")
+
+    ; Show/hide main groups and buttons
+    mainGui.folderGroup.Visible := !isDocMode
+    mainGui.docGroup.Visible := isDocMode
+    mainGui.openBtn.Visible := !isDocMode
+    mainGui.findBtn.Visible := isDocMode
+    mainGui.chooseBtn.Visible := isDocMode
+
+    ; Toggle panel controls
     for c in mainGui.folderCtrls
-        c.Visible := true
+        c.Visible := !isDocMode
     for c in mainGui.docCtrls
-        c.Visible := false
+        c.Visible := isDocMode
 
     ; Reapply layout after mode switch
     try {
@@ -330,41 +351,17 @@ SwitchToFolderMode() {
         MainGuiSize(mainGui, 0, w, h)
     } catch {
     }
-    
-    ; Recalculate minimum size based on folder controls
-    minSize := CalcMinClient(mainGui.folderCtrls, 20, 20, [mainGui.optionsGroup, mainGui.statusText, mainGui.openBtn])
-    mainGui.MinSize := minSize[1] "x" minSize[2]
-    
-    UpdateStatus("Folder mode - Select a project subfolder to open")
-}
 
-SwitchToDocumentMode() {
-    global mainGui
-    
-    ; Show document options, hide folder selection
-    mainGui.folderGroup.Visible := false
-    mainGui.docGroup.Visible := true
-    mainGui.openBtn.Visible := false
-    mainGui.findBtn.Visible := true
-    mainGui.chooseBtn.Visible := true
-        ; Toggle panel controls
-    for c in mainGui.folderCtrls
-        c.Visible := false
-    for c in mainGui.docCtrls
-        c.Visible := true
-
-    ; Reapply layout after mode switch
-    try {
-        mainGui.GetPos(, , &w, &h)
-        MainGuiSize(mainGui, 0, w, h)
-    } catch {
+    ; Recalculate minimum size and update status
+    if (isDocMode) {
+        minSize := CalcMinClient(mainGui.docCtrls, 20, 20, [mainGui.optionsGroup, mainGui.statusText, mainGui.findBtn, mainGui.chooseBtn])
+        mainGui.MinSize := minSize[1] "x" minSize[2]
+        UpdateStatus("Document mode - Find specific documents by type and filters")
+    } else {
+        minSize := CalcMinClient(mainGui.folderCtrls, 20, 20, [mainGui.optionsGroup, mainGui.statusText, mainGui.openBtn])
+        mainGui.MinSize := minSize[1] "x" minSize[2]
+        UpdateStatus("Folder mode - Select a project subfolder to open")
     }
-    
-    ; Recalculate minimum size based on document controls
-    minSize := CalcMinClient(mainGui.docCtrls, 20, 20, [mainGui.optionsGroup, mainGui.statusText, mainGui.findBtn, mainGui.chooseBtn])
-    mainGui.MinSize := minSize[1] "x" minSize[2]
-    
-    UpdateStatus("Document mode - Find specific documents by type and filters")
 }
 
 ValidateInputs() {
@@ -423,7 +420,9 @@ ExecuteProjectNavigation() {
         ; Get selected folder
         selectedFolder := ""
         loop mainGui.folderRadios.Length {
-            if (formData.HasOwnProp("Folder" . A_Index) && formData.GetProp("Folder" . A_Index)) {
+            varName := "Folder" . A_Index
+            ; AHK v2: dynamic property access via object[key]
+            if (formData.HasOwnProp(varName) && formData[varName]) {
                 selectedFolder := mainGui.folderRadios[A_Index].Text
                 break
             }
@@ -509,86 +508,168 @@ ExecuteDocumentNavigation(chooseMode := false) {
 ExecutePythonScript(command, projectInput, extraArgs, formData) {
     try {
         ; Validate inputs
-        if (command = "") {
+        if (command = "")
             throw Error("Command cannot be empty")
-        }
-        if (projectInput = "") {
+        if (projectInput = "")
             throw Error("Project input cannot be empty")
+
+        ; Compute working directory as repository root (parent of script dir)
+        workingDir := NormalizePath(A_ScriptDir . "\..")
+
+        ; Output environment diagnostics
+        OutputDebug("QuickNav Debug: A_ComSpec=" . A_ComSpec)
+        OutputDebug("QuickNav Debug: A_ScriptDir=" . A_ScriptDir)
+        OutputDebug("QuickNav Debug: PATH=" . EnvGet("PATH"))
+
+        ; Try to locate python.exe (visible diagnostic when DebugMode is enabled)
+        tempFile := A_Temp . "\quicknav_output_" . A_TickCount . ".txt"
+        ; where python
+        RunWait(A_ComSpec . " /C where python > " . Chr(34) . tempFile . Chr(34) . " 2>&1", workingDir, "Hide", &whereExit)
+        whereOut := ""
+        if (FileExist(tempFile)) {
+            try whereOut := FileRead(tempFile, "UTF-8")
+        }
+        OutputDebug("QuickNav Debug: where python output: " . whereOut)
+        ; python --version
+        RunWait(A_ComSpec . " /C python --version > " . Chr(34) . tempFile . Chr(34) . " 2>&1", workingDir, "Hide", &verExit)
+        verOut := ""
+        if (FileExist(tempFile)) {
+            try verOut := FileRead(tempFile, "UTF-8")
+        }
+        OutputDebug("QuickNav Debug: python --version output: " . verOut)
+
+        ; Visible diagnostic for users who enabled DebugMode in the GUI
+        if (IsObject(formData) && formData.DebugMode) {
+            infoMsg := "QuickNav debug information (temporary):`n`n"
+            infoMsg .= "A_ComSpec: " . A_ComSpec . "`n"
+            infoMsg .= "A_ScriptDir: " . A_ScriptDir . "`n"
+            infoMsg .= "WorkingDir: " . workingDir . "`n`n"
+            infoMsg .= "where python exit code: " . whereExit . "`nOutput:`n" . (whereOut != "" ? whereOut : "<no output>") . "`n`n"
+            infoMsg .= "python --version exit code: " . verExit . "`nOutput:`n" . (verOut != "" ? verOut : "<no output>") . "`n`n"
+            infoMsg .= "PATH (truncated):`n" . SubStr(EnvGet("PATH"), 1, 1000)
+            MsgBox(infoMsg, "QuickNav Debug - Python detection", 64)
         }
 
-        ; Build command with proper escaping (invoke the CLI module explicitly)
-        cmd := "python -m quicknav.cli " . command . " " . Chr(34) . StrReplace(projectInput, Chr(34), Chr(34) . Chr(34)) . Chr(34)
+        ; Prefer explicit python executable when `where python` returned a path
+        pythonExe := ""
+        if (whereExit = 0 && whereOut != "") {
+            try {
+                ; Take the first line and trim all whitespace, including CR
+                firstLine := StrSplit(whereOut, "`n")[1]
+                pythonExe := Trim(firstLine, " `t`r`n")
+                
+                ; Verify it's a real file before using it
+                if (FileExist(pythonExe)) {
+                    pythonExe := NormalizePath(pythonExe)
+                } else {
+                    pythonExe := ""
+                }
+            } catch {
+                pythonExe := ""
+            }
+        }
+
+        ; Build Python command with PYTHONPATH prefix
+        envPrefix := "set " . Chr(34) . "PYTHONPATH=" . workingDir . Chr(34) . " && "
+        pythonCmd := (pythonExe != "" ? Chr(34) . pythonExe . Chr(34) : "python") . " -m quicknav.cli " . command . " " . Chr(34) . StrReplace(projectInput, Chr(34), Chr(34) . Chr(34)) . Chr(34)
 
         ; Add extra arguments with validation
         if (IsObject(extraArgs)) {
             for arg in extraArgs {
                 if (arg != "") {
-                    cmd .= " " . arg
+                    pythonCmd .= " " . arg
                 }
             }
         } else if (extraArgs != "") {
-            cmd .= " " . extraArgs
+            pythonCmd .= " " . extraArgs
         }
 
         ; Add training data flag if enabled
-        if (formData.HasOwnProp("GenerateTraining") && formData.GenerateTraining) {
-            cmd .= " --training-data"
+        if (formData.GenerateTraining) {
+            pythonCmd .= " --training-data"
         }
+
+        ; Combine with environment prefix
+        cmd := envPrefix . pythonCmd
 
         ; Create unique temp file to avoid conflicts
         tempFile := A_Temp . "\quicknav_output_" . A_TickCount . ".txt"
+        
+        ; Build full command with output+error redirection
+        fullCmd := A_ComSpec . " /C " . cmd . " > " . Chr(34) . tempFile . Chr(34) . " 2>&1"
 
-        ; Build full command with error redirection
-        fullCmd := A_ComSpec . " /C " . Chr(34) . cmd . Chr(34) . " > " . Chr(34) . tempFile . Chr(34) . " 2>&1"
+        ; Enhanced debug diagnostics
+        OutputDebug("QuickNav Debug: workingDir=" . workingDir)
+        OutputDebug("QuickNav Debug: cmd=" . cmd)
+        OutputDebug("QuickNav Debug: fullCmd=" . fullCmd)
 
-        ; Execute command with timeout protection
+        ; Execute command with explicit working directory
         try {
-            RunWait(fullCmd, "", "Hide", &exitCode)
+            RunWait(fullCmd, workingDir, "Hide", &exitCode)
         } catch as runError {
+            OutputDebug("QuickNav Debug: RunWait threw: " . runError.Message)
             throw Error("Failed to execute Python command: " . runError.Message)
         }
 
-        ; Check if command execution was successful, else try legacy fallback for 'project'
+        OutputDebug("QuickNav Debug: exitCode=" . exitCode)
+
+        ; If non-zero exit, try legacy fallback for 'project', else include output preview in error
         if (exitCode != 0) {
             if (command = "project") {
-                ; Legacy fallback: call find_project_path.py directly if quicknav module is unavailable
-                scriptPath := "find_project_path.py"
-                if (!FileExist(scriptPath)) {
-                    scriptPath := "test_find_project_path.py"
-                    if (!FileExist(scriptPath)) {
-                        scriptPath := "..\src\find_project_path.py"
-                        if (!FileExist(scriptPath)) {
-                            scriptPath := "..\src\test_find_project_path.py"
-                        }
+                ; Legacy fallback: call find_project_path.py directly using absolute paths
+                ; Prefer modern location in `quicknav` package, but also check old `src` location.
+                candidates := [
+                    NormalizePath(A_ScriptDir . "\..\quicknav\find_project_path.py"),
+                    NormalizePath(A_ScriptDir . "\find_project_path.py")
+                ]
+                scriptPath := ""
+                for p in candidates {
+                    if (FileExist(p)) {
+                        scriptPath := p
+                        break
                     }
                 }
-                if (FileExist(scriptPath)) {
+                if (scriptPath != "") {
                     legacyCmd := A_ComSpec . " /C " . Chr(34) . "python " . Chr(34) . scriptPath . Chr(34) . " " . Chr(34) . StrReplace(projectInput, Chr(34), Chr(34) . Chr(34)) . Chr(34)
-                    if (formData.HasOwnProp("GenerateTraining") && formData.GenerateTraining) {
+                    if (formData.GenerateTraining) {
                         legacyCmd .= " --training-data"
                     }
                     legacyCmd .= " > " . Chr(34) . tempFile . Chr(34) . " 2>&1"
+                    OutputDebug("QuickNav Debug: legacyCmd=" . legacyCmd)
+                    OutputDebug("QuickNav Debug: legacyWorkingDir=" . workingDir)
                     try {
-                        RunWait(legacyCmd, "", "Hide", &exitCode)
-                    } catch {
+                        RunWait(legacyCmd, workingDir, "Hide", &exitCode)
+                    } catch as legacyError {
+                        OutputDebug("QuickNav Debug: Legacy RunWait threw: " . legacyError.Message)
                         ; ignore and fall through to error
                     }
+                    OutputDebug("QuickNav Debug: legacy exitCode=" . exitCode)
                 }
             }
-            if (exitCode != 0) {
-                throw Error("Python command failed with exit code: " . exitCode)
+            errPreview := ""
+            if (FileExist(tempFile)) {
+                try {
+                    errText := FileRead(tempFile, "UTF-8")
+                    errPreview := SubStr(Trim(errText), 1, 4096)
+                } catch {
+                    ; ignore read error
+                }
             }
+            OutputDebug("QuickNav Debug: error output: " . errPreview)
+            throw Error("Python command failed with exit code: " . exitCode . (errPreview != "" ? "; output: " . errPreview : ""))
         }
 
         ; Check if output file was created
         if (!FileExist(tempFile)) {
+            OutputDebug("QuickNav Debug: tempFile not created: " . tempFile)
             throw Error("Python command did not produce output file")
         }
 
-        ; Read output with size limit to prevent memory issues
+        ; Read output
         try {
             output := FileRead(tempFile, "UTF-8")
         } catch as readError {
+            OutputDebug("QuickNav Debug: Failed to read tempFile: " . readError.Message)
             throw Error("Failed to read Python output: " . readError.Message)
         }
 
@@ -596,34 +677,31 @@ ExecutePythonScript(command, projectInput, extraArgs, formData) {
         try {
             FileDelete(tempFile)
         } catch as cleanupError {
-            ; Log but don't fail on cleanup error
-            if (formData.HasOwnProp("DebugMode") && formData.DebugMode) {
-                OutputDebug("Warning: Failed to clean up temp file: " . cleanupError.Message)
-            }
+            OutputDebug("Warning: Failed to clean up temp file: " . cleanupError.Message)
         }
 
         ; Validate output
         output := Trim(output)
         if (output = "") {
+            OutputDebug("QuickNav Debug: Python command produced no output")
             throw Error("Python command produced no output")
         }
 
         ; Show debug output if enabled
-        if (formData.HasOwnProp("DebugMode") && formData.DebugMode) {
-            MsgBox("Command: " . cmd . "`n`nOutput:`n" . output, "Debug Output", 64)
+        if (formData.DebugMode) {
+            MsgBox("Command: " . cmd . "`nWorkingDir: " . workingDir . "`nExitCode: " . exitCode . "`n`nOutput:`n" . output, "Debug Output", 64)
         }
 
         return output
 
     } catch as e {
-        ; Clean up temp file if it exists
         if (FileExist(tempFile)) {
             try {
                 FileDelete(tempFile)
             } catch {
-                ; Ignore cleanup errors in exception handler
             }
         }
+        OutputDebug("QuickNav Debug: Exception thrown: " . e.Message)
         throw e
     }
 }
@@ -702,14 +780,15 @@ OpenProjectFolder(projectPath, selectedFolder) {
             RaiseError("Selected folder cannot be empty")
         }
 
-        ; Construct full path with proper path handling
-        ; Maintain legacy compatibility:
-        ; - "Floor Plans" and "Site Photos" live under "\1. Sales Handover\"
-        ; - Handle labels with numeric prefixes like "5. Floor Plans" / "6. Site Photos"
-        if (InStr(selectedFolder, "Floor Plans")) {
-            fullPath := projectPath . "\1. Sales Handover\Floor Plans"
-        } else if (InStr(selectedFolder, "Site Photos")) {
-            fullPath := projectPath . "\1. Sales Handover\Site Photos"
+        ; Data-driven approach for folder mappings
+        folderMappings := Map(
+            "5. Floor Plans", "\1. Sales Handover\Floor Plans",
+            "6. Site Photos", "\1. Sales Handover\Site Photos"
+        )
+
+        ; Construct full path
+        if (folderMappings.Has(selectedFolder)) {
+            fullPath := projectPath . folderMappings[selectedFolder]
         } else {
             fullPath := projectPath . "\" . selectedFolder
         }
@@ -921,14 +1000,14 @@ ShowProjectSearchDialog(pathsString, selectedFolder) {
             margin + lvWidth - btnWidth, btnY, btnWidth, btnHeight), "Cancel")
 
         ; Event handlers
-        LV.OnEvent("DoubleClick", (*) => ProcessSearchSelection(searchGui, LV, arrPaths, selectedFolder))
-        openBtn.OnEvent("Click", (*) => ProcessSearchSelection(searchGui, LV, arrPaths, selectedFolder))
+        LV.OnEvent("DoubleClick", (*) => ProcessListSelection(searchGui, LV, 3, "folder", selectedFolder))
+        openBtn.OnEvent("Click", (*) => ProcessListSelection(searchGui, LV, 3, "folder", selectedFolder))
         cancelBtn.OnEvent("Click", (*) => searchGui.Destroy())
         searchGui.OnEvent("Close", (*) => searchGui.Destroy())
         searchGui.OnEvent("Escape", (*) => searchGui.Destroy())
 
         ; Handle window resize
-        searchGui.OnEvent("Size", SearchGuiSize)
+        searchGui.OnEvent("Size", (g, m, w, h) => GenericDialogResize(g, m, w, h, "SearchList"))
 
         ; Show GUI
         searchGui.Show(Format("w{} h{}", guiWidth, guiHeight))
@@ -938,7 +1017,7 @@ ShowProjectSearchDialog(pathsString, selectedFolder) {
     }
 }
 
-SearchGuiSize(thisGui, MinMax, Width, Height) {
+GenericDialogResize(thisGui, MinMax, Width, Height, lvName) {
     if (MinMax = -1)  ; Minimized
         return
 
@@ -946,7 +1025,7 @@ SearchGuiSize(thisGui, MinMax, Width, Height) {
     try {
         ; Resize ListView to fit new window size
         margin := Round(15 * dpiScale)
-        thisGui["SearchList"].Move(, , Width - (margin * 2), Height - Round(120 * dpiScale))
+        thisGui[lvName].Move(, , Width - (margin * 2), Height - Round(120 * dpiScale))
 
         ; Reposition buttons
         btnWidth := Round(80 * dpiScale)
@@ -964,25 +1043,29 @@ SearchGuiSize(thisGui, MinMax, Width, Height) {
     }
 }
 
-ProcessSearchSelection(searchGui, LV, arrPaths, selectedFolder) {
+ProcessListSelection(gui, lv, pathColumn, openAction, selectedFolder := "") {
     try {
         ; Get selected row
-        selectedRow := LV.GetNext()
+        selectedRow := lv.GetNext()
         if (selectedRow = 0) {
-            UpdateStatus("No project selected")
-            MsgBox("Please select a project from the list.", "No Selection", 48)
+            UpdateStatus("No item selected")
+            MsgBox("Please select an item from the list.", "No Selection", 48)
             return
         }
 
-        ; Get the full path from the third column
-        selectedPath := LV.GetText(selectedRow, 3)
-        searchGui.Destroy()
+        ; Get the full path from the specified column
+        selectedPath := lv.GetText(selectedRow, pathColumn)
+        gui.Destroy()
 
-        ; Open the selected project folder
-        OpenProjectFolder(selectedPath, selectedFolder)
+        ; Perform the open action
+        if (openAction = "folder") {
+            OpenProjectFolder(selectedPath, selectedFolder)
+        } else if (openAction = "document") {
+            OpenDocument(selectedPath)
+        }
 
     } catch as e {
-        ShowError("Error processing search selection: " . e.Message)
+        ShowError("Error processing list selection: " . e.Message)
     }
 }
 
@@ -1048,14 +1131,14 @@ ShowDocumentSelectionDialog(pathsString) {
             margin + lvWidth - btnWidth, btnY, btnWidth, btnHeight), "Cancel")
 
         ; Event handlers
-        LV.OnEvent("DoubleClick", (*) => ProcessDocumentSelection(docGui, LV, arrPaths))
-        openBtn.OnEvent("Click", (*) => ProcessDocumentSelection(docGui, LV, arrPaths))
+        LV.OnEvent("DoubleClick", (*) => ProcessListSelection(docGui, LV, 4, "document"))
+        openBtn.OnEvent("Click", (*) => ProcessListSelection(docGui, LV, 4, "document"))
         cancelBtn.OnEvent("Click", (*) => docGui.Destroy())
         docGui.OnEvent("Close", (*) => docGui.Destroy())
         docGui.OnEvent("Escape", (*) => docGui.Destroy())
 
         ; Handle window resize
-        docGui.OnEvent("Size", DocGuiSize)
+        docGui.OnEvent("Size", (g, m, w, h) => GenericDialogResize(g, m, w, h, "DocList"))
 
         ; Show GUI
         docGui.Show(Format("w{} h{}", guiWidth, guiHeight))
@@ -1105,53 +1188,7 @@ ParseDocumentInfo(fileName, fullPath) {
     return docInfo
 }
 
-DocGuiSize(thisGui, MinMax, Width, Height) {
-    if (MinMax = -1)  ; Minimized
-        return
 
-    SetRedraw(thisGui.Hwnd, false)
-    try {
-        ; Resize ListView to fit new window size
-        margin := Round(15 * dpiScale)
-        thisGui["DocList"].Move(, , Width - (margin * 2), Height - Round(120 * dpiScale))
-
-        ; Reposition buttons
-        btnWidth := Round(80 * dpiScale)
-        btnHeight := Round(30 * dpiScale)
-        btnSpacing := Round(20 * dpiScale)
-        btnY := Height - Round(50 * dpiScale)
-
-        thisGui["BtnOpen"].Move(Width - margin - btnWidth - btnSpacing - btnWidth, btnY)
-        thisGui["BtnCancel"].Move(Width - margin - btnWidth, btnY)
-
-    } catch as e {
-        ; Ignore resize errors
-    } finally {
-        SetRedraw(thisGui.Hwnd, true)
-    }
-}
-
-ProcessDocumentSelection(docGui, LV, arrPaths) {
-    try {
-        ; Get selected row
-        selectedRow := LV.GetNext()
-        if (selectedRow = 0) {
-            UpdateStatus("No document selected")
-            MsgBox("Please select a document from the list.", "No Selection", 48)
-            return
-        }
-
-        ; Get the full path from the fourth column
-        selectedPath := LV.GetText(selectedRow, 4)
-        docGui.Destroy()
-
-        ; Open the selected document
-        OpenDocument(selectedPath)
-
-    } catch as e {
-        ShowError("Error processing document selection: " . e.Message)
-    }
-}
 
 ShowSettingsDialog() {
     global mainGui, dpiScale, configPath
@@ -1370,20 +1407,18 @@ ParseSimpleJson(jsonString) {
     settings := Map()
 
     try {
-        ; Remove whitespace
-        jsonString := RegExReplace(jsonString, "\s+", "")
-
-        ; Extract custom_roots array
-        if (RegExMatch(jsonString, '"custom_roots":\[([^\]]*)\]', &match)) {
+        ; Extract custom_roots array without stripping all whitespace
+        if (RegExMatch(jsonString, '"custom_roots"\s*:\s*\[([^\]]*)\]', &match)) {
             rootsString := match[1]
-            if (rootsString != "") {
-                ; Split by comma and clean up quotes
+            if (Trim(rootsString) != "") {
+                ; Split by comma and clean up quotes and surrounding whitespace
                 rootArray := []
-                roots := StrSplit(rootsString, '","')
+                roots := StrSplit(rootsString, ',')
                 for root in roots {
-                    root := Trim(root, '"')
-                    if (root != "")
-                        rootArray.Push(root)
+                    cleanedRoot := Trim(root) ; Trim whitespace from each element
+                    cleanedRoot := Trim(cleanedRoot, '"') ; Trim quotes
+                    if (cleanedRoot != "")
+                        rootArray.Push(cleanedRoot)
                 }
                 settings["custom_roots"] := rootArray
             } else {
@@ -1394,7 +1429,7 @@ ParseSimpleJson(jsonString) {
         }
 
         ; Extract version
-        if (RegExMatch(jsonString, '"version":"([^"]*)"', &match)) {
+        if (RegExMatch(jsonString, '"version"\s*:\s*"([^"]*)"', &match)) {
             settings["version"] := match[1]
         } else {
             settings["version"] := "1.0"
@@ -1554,10 +1589,10 @@ MainGuiSize(thisGui, MinMax, Width, Height) {
             optionsY := optionsTopMin
 
         ; clamp status and buttons to avoid overlap on small heights
-        if (statusY < optionsY + pad)
-            statusY := optionsY + pad
-        if (buttonsY < statusY + pad + btnHeight)
-            buttonsY := statusY + pad + btnHeight
+        if (statusY < optionsY + optionsHeight + pad)
+            statusY := optionsY + optionsHeight + pad
+        if (buttonsY < statusY + statusHeight + pad)
+            buttonsY := statusY + statusHeight + pad
 
         midY := ngY + ngH + pad
         midH := Max(Round(120 * dpiScale), optionsY - midY - pad)
