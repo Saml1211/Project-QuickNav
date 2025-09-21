@@ -547,12 +547,20 @@ class ThemeManager:
             hover = button_colors.get("hover", {})
             pressed = button_colors.get("pressed", {})
             disabled = button_colors.get("disabled", {})
+            primary = button_colors.get("primary", {})
+            primary_hover = button_colors.get("primary_hover", {})
 
+            # Default button style
             self.style.configure("TButton",
                 background=normal.get("bg", theme.get_color("bg")),
                 foreground=normal.get("fg", theme.get_color("fg")),
-                borderwidth=theme.get_geometry("button").get("border_width", 1),
-                relief=theme.get_geometry("button").get("relief", "flat")
+                borderwidth=1,
+                relief="flat",
+                bordercolor=normal.get("border", theme.get_color("border")),
+                focuscolor=theme.get_color("focus"),
+                lightcolor=normal.get("bg", theme.get_color("bg")),
+                darkcolor=normal.get("bg", theme.get_color("bg")),
+                padding=(theme.get_geometry("element").get("button_padding", 12), 6)
             )
 
             self.style.map("TButton",
@@ -568,6 +576,31 @@ class ThemeManager:
                 ]
             )
 
+            # Primary button style
+            if primary:
+                self.style.configure("Primary.TButton",
+                    background=primary.get("bg", theme.get_color("select_bg")),
+                    foreground=primary.get("fg", theme.get_color("select_fg")),
+                    borderwidth=1,
+                    relief="flat",
+                    bordercolor=primary.get("border", primary.get("bg")),
+                    focuscolor=theme.get_color("focus"),
+                    padding=(theme.get_geometry("element").get("button_padding", 12), 6)
+                )
+
+                self.style.map("Primary.TButton",
+                    background=[
+                        ("active", primary_hover.get("bg", primary.get("bg"))),
+                        ("pressed", primary_hover.get("bg", primary.get("bg"))),
+                        ("disabled", disabled.get("bg", normal.get("bg")))
+                    ],
+                    foreground=[
+                        ("active", primary_hover.get("fg", primary.get("fg"))),
+                        ("pressed", primary_hover.get("fg", primary.get("fg"))),
+                        ("disabled", disabled.get("fg", normal.get("fg")))
+                    ]
+                )
+
         # Configure TEntry
         entry_style = theme.get_style("entry")
         entry_colors = entry_style["colors"]
@@ -575,12 +608,18 @@ class ThemeManager:
             normal = entry_colors.get("normal", {})
             focus = entry_colors.get("focus", {})
             disabled = entry_colors.get("disabled", {})
+            error = entry_colors.get("error", {})
 
             self.style.configure("TEntry",
                 fieldbackground=normal.get("bg", theme.get_color("bg")),
                 foreground=normal.get("fg", theme.get_color("fg")),
-                borderwidth=theme.get_geometry("entry").get("border_width", 1),
-                insertcolor=normal.get("fg", theme.get_color("fg"))
+                borderwidth=2,
+                relief="flat",
+                bordercolor=normal.get("border", theme.get_color("border")),
+                lightcolor=normal.get("bg", theme.get_color("bg")),
+                darkcolor=normal.get("bg", theme.get_color("bg")),
+                insertcolor=normal.get("fg", theme.get_color("fg")),
+                padding=(theme.get_geometry("element").get("input_padding", 10), 8)
             )
 
             self.style.map("TEntry",
@@ -594,6 +633,17 @@ class ThemeManager:
                 ]
             )
 
+            # Error entry style
+            if error:
+                self.style.configure("Error.TEntry",
+                    fieldbackground=error.get("bg", normal.get("bg")),
+                    foreground=error.get("fg", normal.get("fg")),
+                    borderwidth=2,
+                    bordercolor=error.get("border", theme.get_color("error")),
+                    insertcolor=normal.get("fg", theme.get_color("fg")),
+                    padding=(theme.get_geometry("element").get("input_padding", 10), 8)
+                )
+
         # Configure TFrame
         frame_style = theme.get_style("frame")
         frame_colors = frame_style["colors"]
@@ -605,21 +655,45 @@ class ThemeManager:
             )
 
         # Configure TLabelFrame
+        labelframe_style = theme.get_style("labelframe")
+        labelframe_colors = labelframe_style.get("colors", {})
+
         self.style.configure("TLabelframe",
-            background=theme.get_color("frame", "bg"),
-            borderwidth=theme.get_geometry("frame").get("border_width", 1)
+            background=labelframe_colors.get("bg", theme.get_color("frame", "bg")),
+            borderwidth=1,
+            bordercolor=labelframe_colors.get("border", theme.get_color("border")),
+            relief="solid",
+            padding=(theme.get_geometry("element").get("section_spacing", 16), 12)
         )
 
         self.style.configure("TLabelframe.Label",
-            background=theme.get_color("frame", "bg"),
-            foreground=theme.get_color("frame", "fg")
+            background=labelframe_colors.get("bg", theme.get_color("frame", "bg")),
+            foreground=labelframe_colors.get("fg", theme.get_color("frame", "fg")),
+            font=(theme.get_font("subheading").get("family", "Segoe UI"),
+                  theme.get_font("subheading").get("size", 12),
+                  theme.get_font("subheading").get("weight", "medium"))
         )
 
         # Configure TCombobox
+        entry_colors = theme.get_style("entry")["colors"]
+        normal = entry_colors.get("normal", {})
+        focus = entry_colors.get("focus", {})
+
         self.style.configure("TCombobox",
-            fieldbackground=theme.get_color("entry", "bg"),
-            foreground=theme.get_color("entry", "fg"),
-            borderwidth=theme.get_geometry("entry").get("border_width", 1)
+            fieldbackground=normal.get("bg", theme.get_color("bg")),
+            foreground=normal.get("fg", theme.get_color("fg")),
+            borderwidth=2,
+            bordercolor=normal.get("border", theme.get_color("border")),
+            relief="flat",
+            padding=(theme.get_geometry("element").get("input_padding", 10), 8),
+            arrowcolor=normal.get("fg", theme.get_color("fg"))
+        )
+
+        self.style.map("TCombobox",
+            fieldbackground=[
+                ("focus", focus.get("bg", normal.get("bg"))),
+                ("readonly", normal.get("bg", theme.get_color("bg")))
+            ]
         )
 
         # Configure TCheckbutton
@@ -667,7 +741,9 @@ class ThemeManager:
         self.style.configure("TNotebook.Tab",
             background=theme.get_color("frame", "bg"),
             foreground=theme.get_color("frame", "fg"),
-            padding=[12, 8]
+            padding=[16, 12],
+            borderwidth=1,
+            relief="flat"
         )
 
         self.style.map("TNotebook.Tab",

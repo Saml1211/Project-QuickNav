@@ -122,14 +122,14 @@ class ProjectQuickNavGUI:
 
     def _setup_ui(self):
         """Set up the main user interface."""
-        # Configure root window
-        self.root.geometry("480x650")
-        self.root.minsize(self.min_width, self.min_height)
+        # Configure root window with improved dimensions
+        self.root.geometry("520x720")
+        self.root.minsize(520, 720)
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
 
-        # Create main container with padding
+        # Create main container with enhanced padding and styling
         self.main_frame = ttk.Frame(self.root)
-        self.main_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+        self.main_frame.pack(fill=tk.BOTH, expand=True, padx=24, pady=24)
 
         # Configure grid weights for responsive layout
         self.main_frame.columnconfigure(0, weight=1)
@@ -140,74 +140,70 @@ class ProjectQuickNavGUI:
         self._create_folder_mode_section()
         self._create_document_mode_section()
         self._create_options_section()
-        self._create_toolbar()
+        self._create_ai_toolbar()
         self._create_status_section()
         self._create_action_buttons()
         self._create_menu_bar()
 
     def _create_project_input_section(self):
-        """Create project input section."""
-        # Project input frame
-        input_frame = ttk.Frame(self.main_frame)
-        input_frame.grid(row=0, column=0, sticky="ew", pady=(0, 15))
-        input_frame.columnconfigure(1, weight=1)
+        """Create project input section with enhanced styling."""
+        # Project input frame with improved styling
+        input_frame = ttk.LabelFrame(self.main_frame, text="🏢 Project Input")
+        input_frame.grid(row=0, column=0, sticky="ew", pady=(0, 20))
+        input_frame.columnconfigure(0, weight=1)
 
-        # Project label
-        ttk.Label(input_frame, text="Project Number:").grid(
-            row=0, column=0, sticky="w", padx=(0, 10)
-        )
-
-        # Project entry with enhanced features
+        # Project entry with enhanced features and better styling
         self.project_entry = EnhancedEntry(
             input_frame,
             textvariable=self.project_input,
-            placeholder="Enter 5-digit project number or search term"
+            placeholder="Enter 5-digit project number or search term",
+            font=("Segoe UI", 11)
         )
-        self.project_entry.grid(row=0, column=1, sticky="ew")
+        self.project_entry.grid(row=0, column=0, sticky="ew", padx=16, pady=16, ipady=4)
 
         # Bind validation events
         self.project_entry.bind('<KeyRelease>', self._on_project_input_change)
         self.project_entry.bind('<FocusOut>', self._on_project_input_change)
 
     def _create_navigation_mode_section(self):
-        """Create navigation mode selection section."""
-        # Navigation mode frame
-        nav_frame = ttk.LabelFrame(self.main_frame, text="Navigation Mode")
-        nav_frame.grid(row=1, column=0, sticky="ew", pady=(0, 15))
+        """Create navigation mode selection section with enhanced styling."""
+        # Navigation mode frame with improved styling
+        nav_frame = ttk.LabelFrame(self.main_frame, text="🎯 Navigation Mode")
+        nav_frame.grid(row=1, column=0, sticky="ew", pady=(0, 20))
         nav_frame.columnconfigure(0, weight=1)
 
-        # Mode selection frame
+        # Mode selection frame with improved spacing
         mode_frame = ttk.Frame(nav_frame)
-        mode_frame.pack(fill="x", padx=10, pady=10)
+        mode_frame.pack(fill="x", padx=16, pady=16)
 
-        # Radio buttons for navigation mode
+        # Radio buttons for navigation mode with better styling
         self.folder_radio = ttk.Radiobutton(
             mode_frame,
-            text="Open Project Folder",
+            text="📁 Open Project Folder",
             variable=self.current_mode,
             value="folder",
             command=self._on_mode_change
         )
-        self.folder_radio.pack(anchor="w", pady=(0, 5))
+        self.folder_radio.pack(anchor="w", pady=(0, 8))
 
         self.doc_radio = ttk.Radiobutton(
             mode_frame,
-            text="Find Documents",
+            text="🔍 Find Documents",
             variable=self.current_mode,
             value="document",
             command=self._on_mode_change
         )
         self.doc_radio.pack(anchor="w")
 
-        # Settings button
+        # Settings button with improved styling
         settings_frame = ttk.Frame(nav_frame)
-        settings_frame.pack(fill="x", padx=10, pady=(0, 10))
+        settings_frame.pack(fill="x", padx=16, pady=(8, 12))
 
         ttk.Button(
             settings_frame,
-            text="Settings",
+            text="⚙️ Settings",
             command=self.show_settings,
-            width=12
+            width=14
         ).pack(side="right")
 
     def _create_folder_mode_section(self):
@@ -346,38 +342,43 @@ class ProjectQuickNavGUI:
         )
         self.training_check.pack(side="left", padx=(20, 0))
 
-    def _create_toolbar(self):
-        """Create toolbar with AI controls."""
-        # Toolbar frame
-        toolbar_frame = ttk.Frame(self.main_frame)
-        toolbar_frame.grid(row=5, column=0, sticky="ew", pady=(0, 15))
+    def _create_ai_toolbar(self):
+        """Create AI toolbar with enhanced styling."""
+        # AI Toolbar frame with improved styling
+        ai_frame = ttk.LabelFrame(self.main_frame, text="🤖 AI Assistant")
+        ai_frame.grid(row=5, column=0, sticky="ew", pady=(0, 20))
 
-        # AI controls section
-        ai_frame = ttk.LabelFrame(toolbar_frame, text="AI Assistant")
-        ai_frame.pack(fill=tk.X, padx=5, pady=5)
+        # AI controls container
+        ai_container = ttk.Frame(ai_frame)
+        ai_container.pack(fill="x", padx=16, pady=16)
 
-        # AI toggle button
+        # AI toggle button with primary styling
         self.ai_toggle_button = ttk.Button(
-            ai_frame,
-            text="Enable AI",
+            ai_container,
+            text="🔌 Enable AI",
             command=self.toggle_ai,
-            width=12
+            style="Primary.TButton",
+            width=14
         )
-        self.ai_toggle_button.pack(side=tk.LEFT, padx=5, pady=5)
+        self.ai_toggle_button.pack(side=tk.LEFT, padx=(0, 8))
 
         # AI chat button
         self.ai_chat_button = ttk.Button(
-            ai_frame,
-            text="AI Chat",
+            ai_container,
+            text="💬 AI Chat",
             command=self.toggle_ai_panel,
-            width=12,
+            width=14,
             state=tk.DISABLED
         )
-        self.ai_chat_button.pack(side=tk.LEFT, padx=5, pady=5)
+        self.ai_chat_button.pack(side=tk.LEFT, padx=(0, 16))
 
-        # AI status indicator
-        self.ai_status_label = ttk.Label(ai_frame, text="AI: Disabled", foreground="red")
-        self.ai_status_label.pack(side=tk.LEFT, padx=(10, 5), pady=5)
+        # AI status indicator with improved styling
+        self.ai_status_label = ttk.Label(
+            ai_container,
+            text="Status: Disabled",
+            font=("Segoe UI", 9)
+        )
+        self.ai_status_label.pack(side=tk.LEFT, pady=2)
 
     def _create_status_section(self):
         """Create status section."""
@@ -404,37 +405,39 @@ class ProjectQuickNavGUI:
         self.progress_bar.grid_remove()
 
     def _create_action_buttons(self):
-        """Create action buttons."""
-        # Button frame
+        """Create action buttons with enhanced styling."""
+        # Button frame with improved spacing
         button_frame = ttk.Frame(self.main_frame)
-        button_frame.grid(row=7, column=0, sticky="ew", pady=(0, 0))
+        button_frame.grid(row=7, column=0, sticky="ew", pady=(20, 0))
 
-        # Center the buttons
+        # Center the buttons with improved spacing
         button_container = ttk.Frame(button_frame)
         button_container.pack(expand=True)
 
-        # Folder mode button
+        # Folder mode button with primary styling
         self.open_button = ttk.Button(
             button_container,
-            text="Open Folder",
+            text="📁 Open Folder",
             command=self.execute_folder_navigation,
-            width=15
+            style="Primary.TButton",
+            width=18
         )
-        self.open_button.pack(side="left", padx=(0, 10))
+        self.open_button.pack(side="left", padx=(0, 12))
 
-        # Document mode buttons (initially hidden)
+        # Document mode buttons with improved styling (initially hidden)
         self.find_button = ttk.Button(
             button_container,
-            text="Find Documents",
+            text="🔍 Find Documents",
             command=self.execute_document_navigation,
-            width=15
+            style="Primary.TButton",
+            width=18
         )
 
         self.choose_button = ttk.Button(
             button_container,
-            text="Choose From List",
+            text="📋 Choose From List",
             command=lambda: self.execute_document_navigation(choose_mode=True),
-            width=15
+            width=18
         )
 
     def _create_menu_bar(self):
@@ -982,16 +985,16 @@ class ProjectQuickNavGUI:
             self.status_text.set("AI Assistant disabled")
 
     def _update_ai_ui(self):
-        """Update AI-related UI elements."""
+        """Update AI-related UI elements with enhanced styling."""
         if hasattr(self, 'ai_toggle_button'):
             if self.ai_enabled.get():
-                self.ai_toggle_button.config(text="Disable AI")
+                self.ai_toggle_button.config(text="🔌 Disable AI")
                 self.ai_chat_button.config(state=tk.NORMAL)
-                self.ai_status_label.config(text="AI: Enabled", foreground="green")
+                self.ai_status_label.config(text="Status: ✅ Enabled")
             else:
-                self.ai_toggle_button.config(text="Enable AI")
+                self.ai_toggle_button.config(text="🔌 Enable AI")
                 self.ai_chat_button.config(state=tk.DISABLED)
-                self.ai_status_label.config(text="AI: Disabled", foreground="red")
+                self.ai_status_label.config(text="Status: ❌ Disabled")
 
     def toggle_ai_panel(self):
         """Toggle AI chat panel visibility."""

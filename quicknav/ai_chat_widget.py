@@ -49,23 +49,23 @@ class MessageBubble(ttk.Frame):
         # Configure grid weights
         self.columnconfigure(1, weight=1)
 
-        # Determine bubble side and colors
+        # Determine bubble side and colors with safe defaults
         if self.role == "user":
             bubble_side = "right"
-            bubble_color = self._get_theme_color("user_bubble", "#0078d4")
-            text_color = self._get_theme_color("user_text", "#ffffff")
+            bubble_color = "#0078d4"  # Default blue for user
+            text_color = "#ffffff"
         elif self.role == "assistant":
             bubble_side = "left"
-            bubble_color = self._get_theme_color("assistant_bubble", "#f0f0f0")
-            text_color = self._get_theme_color("assistant_text", "#000000")
+            bubble_color = "#f0f0f0"  # Default light gray for assistant
+            text_color = "#000000"
         elif self.role == "tool":
             bubble_side = "left"
-            bubble_color = self._get_theme_color("tool_bubble", "#e8f5e8")
-            text_color = self._get_theme_color("tool_text", "#2d5a2d")
+            bubble_color = "#e8f5e8"  # Default light green for tools
+            text_color = "#2d5a2d"
         else:
             bubble_side = "left"
-            bubble_color = self._get_theme_color("system_bubble", "#fff4e6")
-            text_color = self._get_theme_color("system_text", "#8b4513")
+            bubble_color = "#fff4e6"  # Default light orange for system
+            text_color = "#8b4513"
 
         # Create bubble frame
         bubble_frame = ttk.Frame(self)
@@ -83,20 +83,37 @@ class MessageBubble(ttk.Frame):
         if self.theme_manager and hasattr(self.theme_manager, 'get_current_theme'):
             theme = self.theme_manager.get_current_theme()
             if theme:
-                return theme.get_color(element, default)
+                color = theme.get_color(element)
+                # Handle dict color responses
+                if isinstance(color, dict):
+                    return color.get("bg", default) if "bg" in color else color.get("normal", {}).get("bg", default)
+                elif color and color != "#000000":  # Valid color
+                    return color
         return default
 
     def _create_bubble_content(self, parent, bg_color: str, text_color: str):
-        """Create the content of the message bubble."""
-        # Main content frame
-        content_frame = tk.Frame(parent, bg=bg_color, relief=tk.RAISED, bd=1)
-        content_frame.pack(fill=tk.BOTH, expand=True, padx=2, pady=2)
+        """Create the content of the message bubble with modern styling."""
+        # Main content frame with improved styling
+        content_frame = tk.Frame(parent, bg=bg_color, relief=tk.FLAT, bd=0)
+        content_frame.pack(fill=tk.BOTH, expand=True, padx=6, pady=4)
 
-        # Role indicator (small label at top)
+        # Add subtle border radius effect with padding
+        content_frame.configure(highlightbackground="#e1dfdd", highlightthickness=1)
+
+        # Role indicator with icons
+        role_icons = {
+            "assistant": "🤖",
+            "tool": "🔧",
+            "system": "ℹ️"
+        }
+
         if self.role != "user":
+            icon = role_icons.get(self.role, "")
+            role_text = f"{icon} {self.role.title()}" if icon else self.role.title()
+
             role_label = tk.Label(
                 content_frame,
-                text=self.role.title(),
+                text=role_text,
                 bg=bg_color,
                 fg=text_color,
                 font=("Arial", 8, "italic"),
@@ -357,7 +374,7 @@ class MessageBubble(ttk.Frame):
 
 
 class TypingIndicator(ttk.Frame):
-    """Typing indicator widget."""
+    """Enhanced typing indicator widget with modern animation."""
 
     def __init__(self, parent, **kwargs):
         super().__init__(parent, **kwargs)
@@ -365,11 +382,11 @@ class TypingIndicator(ttk.Frame):
         self.is_typing = False
         self.animation_job = None
 
-        # Create typing indicator
-        self.label = ttk.Label(self, text="AI is thinking...")
-        self.label.pack(side=tk.LEFT, padx=5)
+        # Create enhanced typing indicator with icon
+        self.label = ttk.Label(self, text="🤖 AI is thinking", font=("Segoe UI", 9))
+        self.label.pack(side=tk.LEFT, padx=8)
 
-        self.dots = ttk.Label(self, text="")
+        self.dots = ttk.Label(self, text="", font=("Segoe UI", 12))
         self.dots.pack(side=tk.LEFT)
 
         self.dot_count = 0
@@ -388,15 +405,16 @@ class TypingIndicator(ttk.Frame):
         self.pack_forget()
 
     def _animate_dots(self):
-        """Animate the typing dots."""
+        """Animate the typing dots with modern animation."""
         if not self.is_typing:
             return
 
-        self.dot_count = (self.dot_count + 1) % 4
-        dots_text = "." * self.dot_count
-        self.dots.config(text=dots_text)
+        # Use different animation styles
+        animation_frames = ["", "•", "••", "•••"]
+        self.dot_count = (self.dot_count + 1) % len(animation_frames)
+        self.dots.config(text=animation_frames[self.dot_count])
 
-        self.animation_job = self.after(500, self._animate_dots)
+        self.animation_job = self.after(400, self._animate_dots)
 
 
 class ChatWidget(ttk.Frame):
@@ -413,27 +431,27 @@ class ChatWidget(ttk.Frame):
         self._create_widget()
 
     def _create_widget(self):
-        """Create the chat widget."""
+        """Create the chat widget with enhanced modern styling."""
         # Configure grid weights
         self.columnconfigure(0, weight=1)
         self.rowconfigure(0, weight=1)
 
-        # Create main container
-        main_frame = ttk.Frame(self)
-        main_frame.grid(row=0, column=0, sticky="nsew", padx=5, pady=5)
+        # Create main container with improved styling
+        main_frame = ttk.Frame(self, style="Card.TFrame")
+        main_frame.grid(row=0, column=0, sticky="nsew", padx=8, pady=8)
         main_frame.columnconfigure(0, weight=1)
         main_frame.rowconfigure(1, weight=1)
 
-        # Create header
+        # Create header with modern design
         self._create_header(main_frame)
 
-        # Create chat area
+        # Create chat area with better styling
         self._create_chat_area(main_frame)
 
-        # Create input area
+        # Create input area with enhanced UX
         self._create_input_area(main_frame)
 
-        # Create status bar
+        # Create status bar with improved design
         self._create_status_bar(main_frame)
 
     def _create_header(self, parent):

@@ -438,66 +438,77 @@ class SettingsDialog:
         ).pack(side=tk.RIGHT, padx=(0, 5))
 
     def _create_general_tab(self):
-        """Create general settings tab."""
+        """Create general settings tab with modern styling."""
         frame = ttk.Frame(self.notebook)
-        self.notebook.add(frame, text="General")
+        self.notebook.add(frame, text="⚙️ General")
 
-        # Window settings
-        window_group = ttk.LabelFrame(frame, text="Window Settings")
-        window_group.pack(fill=tk.X, padx=10, pady=10)
+        # Window settings with card-style frame
+        window_group = ttk.LabelFrame(frame, text="🪟 Window Settings")
+        window_group.pack(fill=tk.X, padx=16, pady=(16, 20))
 
-        # Always on top
+        # Always on top with enhanced styling
         self.always_on_top_var = tk.BooleanVar()
         self.always_on_top_var.set(self.settings.get("ui.always_on_top", False))
         ttk.Checkbutton(
             window_group,
-            text="Always on top",
+            text="📌 Keep window always on top",
             variable=self.always_on_top_var
-        ).pack(anchor=tk.W, padx=10, pady=5)
+        ).pack(anchor=tk.W, padx=16, pady=(12, 8))
 
-        # Auto hide delay
+        # Auto hide delay with better layout
         delay_frame = ttk.Frame(window_group)
-        delay_frame.pack(fill=tk.X, padx=10, pady=5)
+        delay_frame.pack(fill=tk.X, padx=16, pady=(8, 12))
 
-        ttk.Label(delay_frame, text="Auto-hide delay (ms):").pack(side=tk.LEFT)
+        ttk.Label(
+            delay_frame,
+            text="⏱️ Auto-hide delay (ms):",
+            font=("Segoe UI", 9)
+        ).pack(side=tk.LEFT)
+
         self.auto_hide_var = tk.StringVar()
         self.auto_hide_var.set(str(self.settings.get("ui.auto_hide_delay", 1500)))
-        ttk.Entry(
+        entry = ttk.Entry(
             delay_frame,
             textvariable=self.auto_hide_var,
-            width=10
-        ).pack(side=tk.LEFT, padx=(10, 0))
+            width=12,
+            font=("Segoe UI", 9)
+        )
+        entry.pack(side=tk.LEFT, padx=(12, 0), ipady=2)
 
-        # Navigation defaults
-        nav_group = ttk.LabelFrame(frame, text="Navigation Defaults")
-        nav_group.pack(fill=tk.X, padx=10, pady=10)
+        # Navigation defaults with enhanced styling
+        nav_group = ttk.LabelFrame(frame, text="🧭 Navigation Defaults")
+        nav_group.pack(fill=tk.X, padx=16, pady=(0, 20))
+        nav_group.columnconfigure(1, weight=1)
 
-        # Default mode
-        mode_frame = ttk.Frame(nav_group)
-        mode_frame.pack(fill=tk.X, padx=10, pady=5)
+        # Default mode with improved layout
+        ttk.Label(
+            nav_group,
+            text="🎯 Default mode:",
+            font=("Segoe UI", 9)
+        ).grid(row=0, column=0, sticky="w", padx=(16, 12), pady=(12, 8))
 
-        ttk.Label(mode_frame, text="Default mode:").pack(side=tk.LEFT)
         self.default_mode_var = tk.StringVar()
         self.default_mode_var.set(self.settings.get("navigation.default_mode", "folder"))
         mode_combo = ttk.Combobox(
-            mode_frame,
+            nav_group,
             textvariable=self.default_mode_var,
             values=["folder", "document"],
             state="readonly",
-            width=15
+            width=18,
+            font=("Segoe UI", 9)
         )
-        mode_combo.pack(side=tk.LEFT, padx=(10, 0))
+        mode_combo.grid(row=0, column=1, sticky="ew", padx=(0, 16), pady=(12, 8), ipady=2)
 
-        # Remember selections
+        # Remember selections with icon
         self.remember_selections_var = tk.BooleanVar()
         self.remember_selections_var.set(
             self.settings.get("navigation.remember_last_selections", True)
         )
         ttk.Checkbutton(
             nav_group,
-            text="Remember last selections",
+            text="💾 Remember last selections",
             variable=self.remember_selections_var
-        ).pack(anchor=tk.W, padx=10, pady=5)
+        ).grid(row=1, column=0, columnspan=2, sticky="w", padx=16, pady=(8, 12))
 
     def _create_paths_tab(self):
         """Create custom paths tab."""
@@ -820,7 +831,7 @@ class SettingsDialog:
             from quicknav.ai_client import AIClient
 
             # Get current settings from the form
-            model = self.model_var.get()
+            model = self.ai_model_var.get()
             openai_key = self.openai_key_var.get().strip()
             anthropic_key = self.anthropic_key_var.get().strip()
             azure_key = self.azure_key_var.get().strip()
@@ -1041,14 +1052,14 @@ class SettingsDialog:
     def _reset_to_defaults(self):
         """Reset all settings to defaults."""
         result = messagebox.askyesno(
-            "Reset Settings",
-            "Reset all settings to default values? This cannot be undone."
+            "🔄 Reset Settings",
+            "⚠️ Reset all settings to default values?\n\nThis action cannot be undone and will restore all settings to their original state."
         )
 
         if result:
             self.settings.reset_to_defaults()
             self._refresh_dialog()
-            messagebox.showinfo("Reset Complete", "All settings have been reset to defaults.")
+            messagebox.showinfo("✅ Reset Complete", "🎉 All settings have been successfully reset to defaults.")
 
     def _refresh_dialog(self):
         """Refresh dialog with current settings."""
