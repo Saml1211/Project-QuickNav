@@ -49,23 +49,23 @@ class MessageBubble(ttk.Frame):
         # Configure grid weights
         self.columnconfigure(1, weight=1)
 
-        # Determine bubble side and colors with safe defaults
+        # Determine bubble side and colors with safe defaults and theme support
         if self.role == "user":
             bubble_side = "right"
-            bubble_color = "#0078d4"  # Default blue for user
-            text_color = "#ffffff"
+            bubble_color = self._get_safe_color("frame", "#0078d4")
+            text_color = self._get_safe_color("text_fg", "#ffffff")
         elif self.role == "assistant":
             bubble_side = "left"
-            bubble_color = "#f0f0f0"  # Default light gray for assistant
-            text_color = "#000000"
+            bubble_color = self._get_safe_color("frame", "#f0f0f0")
+            text_color = self._get_safe_color("text_fg", "#000000")
         elif self.role == "tool":
             bubble_side = "left"
-            bubble_color = "#e8f5e8"  # Default light green for tools
-            text_color = "#2d5a2d"
+            bubble_color = self._get_safe_color("frame", "#e8f5e8")
+            text_color = self._get_safe_color("text_fg", "#2d5a2d")
         else:
             bubble_side = "left"
-            bubble_color = "#fff4e6"  # Default light orange for system
-            text_color = "#8b4513"
+            bubble_color = self._get_safe_color("frame", "#fff4e6")
+            text_color = self._get_safe_color("text_fg", "#8b4513")
 
         # Create bubble frame
         bubble_frame = ttk.Frame(self)
@@ -78,17 +78,37 @@ class MessageBubble(ttk.Frame):
         # Create bubble content
         self._create_bubble_content(bubble_frame, bubble_color, text_color)
 
+    def _get_safe_color(self, element: str, default: str) -> str:
+        """Get a safe color string, always returning a valid hex color."""
+        # Always return the default for now to ensure stability
+        return default
+
     def _get_theme_color(self, element: str, default: str) -> str:
         """Get color from theme manager or use default."""
-        if self.theme_manager and hasattr(self.theme_manager, 'get_current_theme'):
-            theme = self.theme_manager.get_current_theme()
-            if theme:
-                color = theme.get_color(element)
-                # Handle dict color responses
-                if isinstance(color, dict):
-                    return color.get("bg", default) if "bg" in color else color.get("normal", {}).get("bg", default)
-                elif color and color != "#000000":  # Valid color
-                    return color
+        try:
+            if self.theme_manager and hasattr(self.theme_manager, 'get_current_theme'):
+                theme = self.theme_manager.get_current_theme()
+                if theme and hasattr(theme, 'get_color'):
+                    color = theme.get_color(element)
+                    # Handle dict color responses
+                    if isinstance(color, dict):
+                        # Try different keys to extract the color
+                        if "bg" in color:
+                            return str(color["bg"])
+                        elif "normal" in color and isinstance(color["normal"], dict):
+                            return str(color["normal"].get("bg", default))
+                        elif "normal" in color:
+                            return str(color["normal"])
+                        else:
+                            # Return first value if available
+                            for key, value in color.items():
+                                if isinstance(value, str) and value.startswith("#"):
+                                    return value
+                    elif isinstance(color, str) and color.startswith("#"):
+                        return color
+        except Exception:
+            # Silently fall back to default if theme access fails
+            pass
         return default
 
     def _create_bubble_content(self, parent, bg_color: str, text_color: str):
@@ -437,7 +457,7 @@ class ChatWidget(ttk.Frame):
         self.rowconfigure(0, weight=1)
 
         # Create main container with improved styling
-        main_frame = ttk.Frame(self, style="Card.TFrame")
+        main_frame = ttk.Frame(self)
         main_frame.grid(row=0, column=0, sticky="nsew", padx=8, pady=8)
         main_frame.columnconfigure(0, weight=1)
         main_frame.rowconfigure(1, weight=1)

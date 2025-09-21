@@ -1135,8 +1135,10 @@ For more help, visit the project documentation."""
         try:
             from .gui_hotkey import HotkeyManager
             self.hotkey_manager = HotkeyManager()
-            self.hotkey_manager.register_hotkey('ctrl+alt+q', self.toggle_window)
-            logger.info("Global hotkey registered: Ctrl+Alt+Q")
+            if self.hotkey_manager.register_hotkey('ctrl+alt+q', self.toggle_window):
+                logger.info("Global hotkey registered: Ctrl+Alt+Q")
+            else:
+                logger.warning("Failed to register global hotkey Ctrl+Alt+Q")
         except ImportError:
             logger.warning("Global hotkey support not available")
         except Exception as e:

@@ -70,8 +70,12 @@ class WindowsHotkeyHandler(HotkeyHandler):
             self.win32con = win32con
             self.win32gui = win32gui
             self.available = True
+            logger.debug("Windows hotkey handler initialized with win32 API")
         except ImportError:
             logger.warning("win32 API not available, Windows hotkeys disabled")
+            self.available = False
+        except Exception as e:
+            logger.error(f"Failed to initialize Windows hotkey handler: {e}")
             self.available = False
 
     def register_hotkey(self, hotkey: str, callback: Callable) -> bool:

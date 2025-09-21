@@ -759,14 +759,25 @@ class ThemeManager:
 
     def _configure_tk_defaults(self, root: tk.Tk, theme: Theme):
         """Configure default Tk widget options."""
+        # Helper method to safely extract colors from nested structures
+        def get_safe_color(element: str, state: str = "normal", prop: str = "bg") -> str:
+            """Safely extract color from theme, handling nested structures."""
+            try:
+                color_data = theme.get_color(element, state)
+                if isinstance(color_data, dict):
+                    return color_data.get(prop, "#000000")
+                return color_data if color_data else "#000000"
+            except:
+                return "#000000"
+
         # Get default colors
-        bg = theme.get_color("bg")
-        fg = theme.get_color("fg")
-        select_bg = theme.get_color("select_bg")
-        select_fg = theme.get_color("select_fg")
-        active_bg = theme.get_color("active_bg")
-        active_fg = theme.get_color("active_fg")
-        disabled_fg = theme.get_color("disabled_fg")
+        bg = get_safe_color("window", "normal", "bg")
+        fg = get_safe_color("window", "normal", "fg")
+        select_bg = get_safe_color("window", "select", "bg")
+        select_fg = get_safe_color("window", "select", "fg")
+        active_bg = get_safe_color("window", "active", "bg")
+        active_fg = get_safe_color("window", "active", "fg")
+        disabled_fg = get_safe_color("window", "disabled", "fg")
 
         # Configure default options
         root.option_add("*Background", bg)
@@ -778,20 +789,20 @@ class ThemeManager:
         root.option_add("*ActiveForeground", active_fg)
 
         # Configure specific widget defaults
-        root.option_add("*Listbox.Background", theme.get_color("listbox", "bg"))
-        root.option_add("*Listbox.Foreground", theme.get_color("listbox", "fg"))
-        root.option_add("*Listbox.SelectBackground", theme.get_color("listbox", "select_bg"))
-        root.option_add("*Listbox.SelectForeground", theme.get_color("listbox", "select_fg"))
+        root.option_add("*Listbox.Background", get_safe_color("listbox", "normal", "bg"))
+        root.option_add("*Listbox.Foreground", get_safe_color("listbox", "normal", "fg"))
+        root.option_add("*Listbox.SelectBackground", get_safe_color("listbox", "select", "bg"))
+        root.option_add("*Listbox.SelectForeground", get_safe_color("listbox", "select", "fg"))
 
-        root.option_add("*Text.Background", theme.get_color("text", "bg"))
-        root.option_add("*Text.Foreground", theme.get_color("text", "fg"))
-        root.option_add("*Text.SelectBackground", theme.get_color("text", "select_bg"))
-        root.option_add("*Text.SelectForeground", theme.get_color("text", "select_fg"))
+        root.option_add("*Text.Background", get_safe_color("text", "normal", "bg"))
+        root.option_add("*Text.Foreground", get_safe_color("text", "normal", "fg"))
+        root.option_add("*Text.SelectBackground", get_safe_color("text", "select", "bg"))
+        root.option_add("*Text.SelectForeground", get_safe_color("text", "select", "fg"))
 
-        root.option_add("*Menu.Background", theme.get_color("menu", "bg"))
-        root.option_add("*Menu.Foreground", theme.get_color("menu", "fg"))
-        root.option_add("*Menu.ActiveBackground", theme.get_color("menu", "active_bg"))
-        root.option_add("*Menu.ActiveForeground", theme.get_color("menu", "active_fg"))
+        root.option_add("*Menu.Background", get_safe_color("menu", "normal", "bg"))
+        root.option_add("*Menu.Foreground", get_safe_color("menu", "normal", "fg"))
+        root.option_add("*Menu.ActiveBackground", get_safe_color("menu", "active", "bg"))
+        root.option_add("*Menu.ActiveForeground", get_safe_color("menu", "active", "fg"))
 
     def add_theme_change_callback(self, callback: Callable[[Theme], None]):
         """Add a callback to be called when theme changes."""

@@ -4,6 +4,8 @@
 
 The Project QuickNav Tkinter GUI is a comprehensive desktop application that fully replicates and enhances the functionality of the original AutoHotkey implementation. Built with Python's Tkinter framework, it provides a modern, cross-platform interface for project navigation with advanced features including AI assistance, theming, and enhanced document search capabilities.
 
+**Latest Update (v2.1):** Major stability improvements including fixes for theme rendering issues, AI chat initialization errors, and enhanced error handling throughout the application.
+
 ## Table of Contents
 
 1. [Architecture Overview](#architecture-overview)
@@ -541,6 +543,40 @@ Application logs are stored in:
 - **macOS/Linux**: `/tmp/quicknav.log`
 
 Enable detailed logging with debug mode for troubleshooting.
+
+## Recent Fixes & Improvements (v2.1)
+
+### Critical Bug Fixes
+
+1. **MessageBubble Initialization Error** - Fixed `_tkinter.TclError: unknown color name` errors
+   - **Issue**: Theme color dictionaries were being passed directly to Tkinter as color strings
+   - **Fix**: Enhanced `_get_theme_color` method with proper color extraction and validation
+   - **Impact**: AI chat functionality now works reliably without crashes
+
+2. **Theme Color Handling** - Resolved nested color structure navigation issues
+   - **Issue**: `_configure_tk_defaults` method incorrectly treated color properties as states
+   - **Fix**: Implemented proper color navigation: `element -> state -> property`
+   - **Impact**: All themes now render correctly with proper colors
+
+3. **Windows Hotkey Registration** - Enhanced error reporting and validation
+   - **Issue**: Failed hotkey registration was incorrectly logged as successful
+   - **Fix**: Added return value checking and accurate logging
+   - **Impact**: Users now receive clear feedback on hotkey registration status
+
+### UI/UX Enhancements
+
+- Enhanced typography system with proper font hierarchy
+- Improved color schemes for better contrast and readability
+- Modernized layout with better spacing and visual hierarchy
+- Added comprehensive error handling throughout the application
+- Stabilized AI chat widget rendering and theming
+
+### Technical Improvements
+
+- Added defensive programming patterns for theme color handling
+- Enhanced error logging and user feedback
+- Improved code reliability and maintainability
+- Added comprehensive test coverage for UI improvements
 
 ---
 

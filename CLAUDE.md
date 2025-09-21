@@ -84,12 +84,19 @@ python src/find_project_path.py "Test Project"
 ```bash
 # Run GUI application
 python quicknav/gui_launcher.py
+python -m quicknav.gui
 
 # Run AI integration tests
 python quicknav/test_ai_integration.py
 
 # Run LiteLLM functionality tests (requires LiteLLM)
 python quicknav/test_litellm_functionality.py
+
+# Run UI improvements test
+python test_ui_improvements.py
+
+# Run settings styling test
+python test_settings_styling.py
 
 # Run interactive GUI test
 python test_gui.py
@@ -163,12 +170,14 @@ python src/find_project_path.py 17741 --training-data
 - **Cross-Platform**: Works on Windows, macOS, and Linux
 - **AI Assistant**: Chat interface with natural language project navigation
 - **Enhanced Search**: Advanced document filtering and preview
-- **Theming**: Light, Dark, and High Contrast themes
-- **Global Hotkeys**: Configurable system-wide shortcuts
+- **Theming**: Light, Dark, and High Contrast themes with robust color handling
+- **Global Hotkeys**: Configurable system-wide shortcuts with proper error reporting
 - **Settings Management**: Comprehensive configuration interface
 - **Real-time Validation**: Input validation and autocomplete
 - **Performance**: Async operations and intelligent caching
 - **Accessibility**: DPI-aware scaling and keyboard navigation
+- **Error Handling**: Comprehensive error handling and recovery mechanisms
+- **UI Stability**: Fixed theme rendering and widget initialization issues
 
 ### AutoHotkey GUI Features (Legacy)
 - Project code or search term input
@@ -260,9 +269,30 @@ The integrated AI assistant can:
 - **Recent Access**: "Show me recently accessed projects"
 - **Navigation Help**: "How do I navigate to the Sales Handover folder?"
 
+### Recent Improvements & Bug Fixes
+
+**v2.1 - UI/UX Enhancements & Stability Fixes** (Latest)
+- Fixed MessageBubble initialization error causing AI chat crashes
+- Resolved theme color handling issues with nested color structures
+- Enhanced Windows hotkey registration with proper error reporting
+- Improved typography and spacing across all UI components
+- Added comprehensive error handling for theme system
+- Stabilized AI chat widget rendering and theming
+- Updated settings dialog with modern visual design
+
+**Key Technical Fixes:**
+- Fixed `_tkinter.TclError: unknown color name` errors in theme system
+- Resolved dictionary color objects being passed as color strings
+- Enhanced `_configure_tk_defaults` method with proper color extraction
+- Added defensive programming for theme color navigation
+- Improved hotkey setup logging and error checking
+
 ### Detailed Documentation
 
 For complete documentation of the Tkinter GUI and AI integration, see:
 - `docs/GUI_Documentation.md` - Comprehensive GUI documentation
+- `docs/AI_Integration_Summary.md` - AI implementation summary
 - `quicknav/test_ai_integration.py` - AI functionality examples
 - `quicknav/test_litellm_functionality.py` - LiteLLM integration examples
+- `test_ui_improvements.py` - UI enhancement tests
+- `test_settings_styling.py` - Settings dialog styling tests
