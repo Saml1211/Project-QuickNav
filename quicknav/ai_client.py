@@ -732,6 +732,14 @@ Be concise but helpful in your responses. When using tools, explain what you're 
         """Check if AI features are enabled."""
         return self.enabled
 
+    def is_available(self) -> bool:
+        """Check if AI client is available and ready to use."""
+        return self.enabled and LITELLM_AVAILABLE
+
+    def get_models(self) -> List[str]:
+        """Get list of available AI models (alias for get_available_models)."""
+        return self.get_available_models()
+
     def get_usage_stats(self) -> Dict[str, Any]:
         """Get usage statistics."""
         return {

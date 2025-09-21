@@ -59,7 +59,7 @@ class SettingsManager:
                 "show_settings": "ctrl+comma"
             },
             "ui": {
-                "window_geometry": "480x650",
+                "window_geometry": "520x820",
                 "always_on_top": False,
                 "auto_hide_delay": 1500,
                 "show_recent_projects": True,
@@ -176,9 +176,9 @@ class SettingsManager:
         self.settings["custom_roots"] = valid_roots
 
         # Validate window geometry
-        geometry = self.settings.get("ui", {}).get("window_geometry", "480x650")
+        geometry = self.settings.get("ui", {}).get("window_geometry", "520x820")
         if not self._is_valid_geometry(geometry):
-            self.settings["ui"]["window_geometry"] = "480x650"
+            self.settings["ui"]["window_geometry"] = "520x820"
 
     def _is_valid_geometry(self, geometry: str) -> bool:
         """Check if geometry string is valid."""
@@ -256,7 +256,7 @@ class SettingsManager:
 
     def get_window_geometry(self) -> str:
         """Get window geometry."""
-        return self.get("ui.window_geometry", "480x650")
+        return self.get("ui.window_geometry", "520x820")
 
     def get_default_mode(self) -> str:
         """Get default navigation mode."""
@@ -873,12 +873,13 @@ class SettingsDialog:
             ai_client = AIClient(settings=test_settings_obj)
 
             # Test with a simple message
-            response = ai_client.send_message("Hello, this is a connection test.")
+            import asyncio
+            response = asyncio.run(ai_client.chat("Hello, this is a connection test."))
 
-            if response and response.get('content'):
+            if response and len(response.strip()) > 0:
                 messagebox.showinfo(
                     "Test Successful",
-                    f"AI connection test successful!\n\nModel: {model}\nResponse: {response['content'][:100]}..."
+                    f"AI connection test successful!\n\nModel: {model}\nResponse: {response[:100]}..."
                 )
             else:
                 messagebox.showwarning("Test Failed", "AI responded but with empty content.")
@@ -893,14 +894,18 @@ class SettingsDialog:
 
     def _on_model_change(self, *args):
         """Handle model selection change."""
-        model = self.model_var.get()
-        # Enable/disable API key fields based on model
-        if model.startswith('gpt-') or model.startswith('o1-'):
-            self.openai_key_entry.config(state='normal')
-        elif model.startswith('claude-'):
-            self.anthropic_key_entry.config(state='normal')
-        elif model.startswith('azure-'):
-            self.azure_key_entry.config(state='normal')
+        if hasattr(self, 'ai_model_var'):
+            model = self.ai_model_var.get()
+            # Enable/disable API key fields based on model
+            if model.startswith('gpt-') or model.startswith('o1-'):
+                if hasattr(self, 'openai_key_entry'):
+                    self.openai_key_entry.config(state='normal')
+            elif model.startswith('claude-'):
+                if hasattr(self, 'anthropic_key_entry'):
+                    self.anthropic_key_entry.config(state='normal')
+            elif model.startswith('azure-'):
+                if hasattr(self, 'azure_key_entry'):
+                    self.azure_key_entry.config(state='normal')
 
     def _create_advanced_tab(self):
         """Create advanced settings tab."""
@@ -1097,7 +1102,7 @@ class SettingsDialog:
         # Update AI settings if they exist (AI tab may not be created yet)
         if hasattr(self, 'ai_enabled_var'):
             self.settings.set("ai.enabled", self.ai_enabled_var.get())
-            self.settings.set("ai.default_model", self.model_var.get())
+            self.settings.set("ai.default_model", self.ai_model_var.get())
             self.settings.set("ai.api_keys.openai", self.openai_key_var.get())
             self.settings.set("ai.api_keys.anthropic", self.anthropic_key_var.get())
             self.settings.set("ai.api_keys.azure", self.azure_key_var.get())
@@ -1140,3 +1145,22 @@ class SettingsDialog:
                 return
 
         self.dialog.destroy()
+
+    def destroy(self):
+        """Destroy the settings dialog and clean up resources."""
+        if hasattr(self, 'dialog') and self.dialog and self.dialog.winfo_exists():
+            try:
+                # Release grab and destroy dialog
+                self.dialog.grab_release()
+                self.dialog.destroy()
+            except Exception as e:
+                logger.warning(f"Error during settings dialog cleanup: {e}")
+            finally:
+                self.dialog = None
+
+    def __del__(self):
+        """Destructor to ensure cleanup."""
+        try:
+            self.destroy()
+        except Exception:
+            pass  # Ignore errors during destruction

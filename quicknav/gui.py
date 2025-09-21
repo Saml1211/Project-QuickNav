@@ -37,25 +37,66 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Import core components
 try:
     from .gui_controller import GuiController
     from .gui_settings import SettingsManager
     from .gui_theme import ThemeManager
     from .gui_widgets import *
-    from .ai_client import AIClient
-    from .ai_chat_widget import ChatWidget as AIChatWidget
 except ImportError:
     # Fallback imports for development
     from gui_controller import GuiController
     from gui_settings import SettingsManager
     from gui_theme import ThemeManager
     from gui_widgets import *
+
+# Import optional AI components with proper error handling
+AIClient = None
+AIChatWidget = None
+AI_AVAILABLE = False
+AI_IMPORT_ERROR = None
+
+try:
+    from .ai_client import AIClient
+    from .ai_chat_widget import ChatWidget as AIChatWidget
+    AI_AVAILABLE = True
+except ImportError as e:
     try:
+        # Try development imports
         from ai_client import AIClient
         from ai_chat_widget import ChatWidget as AIChatWidget
-    except ImportError:
+        AI_AVAILABLE = True
+    except ImportError as fallback_e:
         AIClient = None
         AIChatWidget = None
+        AI_AVAILABLE = False
+        AI_IMPORT_ERROR = str(fallback_e)
+        logger.info(f"AI components not available: {fallback_e}")
+
+# Check for optional dependencies
+OPTIONAL_DEPS = {
+    'litellm': False,
+    'keyboard': False,
+    'pystray': False
+}
+
+try:
+    import litellm
+    OPTIONAL_DEPS['litellm'] = True
+except ImportError:
+    pass
+
+try:
+    import keyboard
+    OPTIONAL_DEPS['keyboard'] = True
+except ImportError:
+    pass
+
+try:
+    import pystray
+    OPTIONAL_DEPS['pystray'] = True
+except ImportError:
+    pass
 
 
 class ProjectQuickNavGUI:
@@ -90,8 +131,8 @@ class ProjectQuickNavGUI:
 
         # UI state
         self.is_resizing = False
-        self.min_width = 480
-        self.min_height = 650
+        self.min_width = 520
+        self.min_height = 820
 
         # Task queue for async operations
         self.task_queue = queue.Queue()
@@ -112,6 +153,9 @@ class ProjectQuickNavGUI:
         self._setup_validation()
         self._apply_theme()
 
+        # Restore window state
+        self.restore_window_state()
+
         # Start task processor
         self._start_task_processor()
 
@@ -120,11 +164,19 @@ class ProjectQuickNavGUI:
 
         logger.info("ProjectQuickNavGUI initialized successfully")
 
+    def _ensure_main_thread(self, func, *args, **kwargs):
+        """Ensure a function runs in the main thread."""
+        if threading.current_thread() == threading.main_thread():
+            return func(*args, **kwargs)
+        else:
+            self.root.after(0, lambda: func(*args, **kwargs))
+
     def _setup_ui(self):
         """Set up the main user interface."""
-        # Configure root window with improved dimensions
-        self.root.geometry("520x720")
-        self.root.minsize(520, 720)
+        # Configure root window with saved or default dimensions
+        saved_geometry = self.settings.get_window_geometry()
+        self.root.geometry(saved_geometry)
+        self.root.minsize(self.min_width, self.min_height)
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
 
         # Create main container with enhanced padding and styling
@@ -148,7 +200,7 @@ class ProjectQuickNavGUI:
     def _create_project_input_section(self):
         """Create project input section with enhanced styling."""
         # Project input frame with improved styling
-        input_frame = ttk.LabelFrame(self.main_frame, text="🏢 Project Input")
+        input_frame = ttk.LabelFrame(self.main_frame, text="Project Input")
         input_frame.grid(row=0, column=0, sticky="ew", pady=(0, 20))
         input_frame.columnconfigure(0, weight=1)
 
@@ -168,7 +220,7 @@ class ProjectQuickNavGUI:
     def _create_navigation_mode_section(self):
         """Create navigation mode selection section with enhanced styling."""
         # Navigation mode frame with improved styling
-        nav_frame = ttk.LabelFrame(self.main_frame, text="🎯 Navigation Mode")
+        nav_frame = ttk.LabelFrame(self.main_frame, text="Navigation Mode")
         nav_frame.grid(row=1, column=0, sticky="ew", pady=(0, 20))
         nav_frame.columnconfigure(0, weight=1)
 
@@ -188,23 +240,14 @@ class ProjectQuickNavGUI:
 
         self.doc_radio = ttk.Radiobutton(
             mode_frame,
-            text="🔍 Find Documents",
+            text="Find Documents",
             variable=self.current_mode,
             value="document",
             command=self._on_mode_change
         )
         self.doc_radio.pack(anchor="w")
 
-        # Settings button with improved styling
-        settings_frame = ttk.Frame(nav_frame)
-        settings_frame.pack(fill="x", padx=16, pady=(8, 12))
-
-        ttk.Button(
-            settings_frame,
-            text="⚙️ Settings",
-            command=self.show_settings,
-            width=14
-        ).pack(side="right")
+        # Remove standalone settings button - available via menu
 
     def _create_folder_mode_section(self):
         """Create folder selection section for folder mode."""
@@ -345,7 +388,7 @@ class ProjectQuickNavGUI:
     def _create_ai_toolbar(self):
         """Create AI toolbar with enhanced styling."""
         # AI Toolbar frame with improved styling
-        ai_frame = ttk.LabelFrame(self.main_frame, text="🤖 AI Assistant")
+        ai_frame = ttk.LabelFrame(self.main_frame, text="AI Assistant")
         ai_frame.grid(row=5, column=0, sticky="ew", pady=(0, 20))
 
         # AI controls container
@@ -355,9 +398,8 @@ class ProjectQuickNavGUI:
         # AI toggle button with primary styling
         self.ai_toggle_button = ttk.Button(
             ai_container,
-            text="🔌 Enable AI",
+            text="Enable AI",
             command=self.toggle_ai,
-            style="Primary.TButton",
             width=14
         )
         self.ai_toggle_button.pack(side=tk.LEFT, padx=(0, 8))
@@ -365,7 +407,7 @@ class ProjectQuickNavGUI:
         # AI chat button
         self.ai_chat_button = ttk.Button(
             ai_container,
-            text="💬 AI Chat",
+            text="AI Chat",
             command=self.toggle_ai_panel,
             width=14,
             state=tk.DISABLED
@@ -417,9 +459,8 @@ class ProjectQuickNavGUI:
         # Folder mode button with primary styling
         self.open_button = ttk.Button(
             button_container,
-            text="📁 Open Folder",
+            text="Open Folder",
             command=self.execute_folder_navigation,
-            style="Primary.TButton",
             width=18
         )
         self.open_button.pack(side="left", padx=(0, 12))
@@ -427,15 +468,14 @@ class ProjectQuickNavGUI:
         # Document mode buttons with improved styling (initially hidden)
         self.find_button = ttk.Button(
             button_container,
-            text="🔍 Find Documents",
+            text="Find Documents",
             command=self.execute_document_navigation,
-            style="Primary.TButton",
             width=18
         )
 
         self.choose_button = ttk.Button(
             button_container,
-            text="📋 Choose From List",
+            text="Choose From List",
             command=lambda: self.execute_document_navigation(choose_mode=True),
             width=18
         )
@@ -477,6 +517,8 @@ class ProjectQuickNavGUI:
         # Help menu
         help_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="Help", menu=help_menu)
+        help_menu.add_command(label="Dependency Status...", command=self.show_dependency_status)
+        help_menu.add_separator()
         help_menu.add_command(label="About", command=self.show_about)
         help_menu.add_command(label="User Guide", command=self.show_help)
 
@@ -519,23 +561,30 @@ class ProjectQuickNavGUI:
         self._process_results()
 
     def _process_results(self):
-        """Process results from background tasks."""
+        """Process results from background tasks safely in main thread."""
         try:
             while True:
                 result = self.result_queue.get_nowait()
                 self._handle_task_result(result)
         except queue.Empty:
             pass
+        except Exception as e:
+            logger.error(f"Error processing task result: {e}")
 
         # Schedule next check
         self.root.after(100, self._process_results)
 
     def _handle_task_result(self, result: Dict[str, Any]):
-        """Handle a task result."""
+        """Handle a task result safely from main thread."""
         task_type = result.get('type')
         success = result.get('success', False)
         data = result.get('data')
         error = result.get('error')
+
+        # Ensure we're running in the main thread
+        if threading.current_thread() != threading.main_thread():
+            self.root.after(0, lambda: self._handle_task_result(result))
+            return
 
         # Hide progress bar
         self.progress_bar.grid_remove()
@@ -665,14 +714,18 @@ class ProjectQuickNavGUI:
         self.progress_bar.start()
         self.status_text.set("Searching for project...")
 
+        # Capture current values to avoid thread safety issues
+        debug_mode_value = self.debug_mode.get()
+        training_mode_value = self.training_mode.get()
+
         # Execute in background
         def task():
             try:
                 result = self.controller.navigate_to_project(
                     project_input=project_input,
                     selected_folder=selected_folder,
-                    debug_mode=self.debug_mode.get(),
-                    training_data=self.training_mode.get()
+                    debug_mode=debug_mode_value,
+                    training_data=training_mode_value
                 )
                 self.result_queue.put({
                     'type': 'project_navigation',
@@ -721,19 +774,27 @@ class ProjectQuickNavGUI:
         self.progress_bar.start()
         self.status_text.set("Searching for documents...")
 
+        # Capture current values to avoid thread safety issues
+        version_filter_value = self.version_filter.get()
+        room_filter_value = self.room_filter.get()
+        co_filter_value = self.co_filter.get()
+        include_archive_value = self.include_archive.get()
+        debug_mode_value = self.debug_mode.get()
+        training_mode_value = self.training_mode.get()
+
         # Execute in background
         def task():
             try:
                 result = self.controller.navigate_to_document(
                     project_input=project_input,
                     doc_type=doc_type_key,
-                    version_filter=self.version_filter.get(),
-                    room_filter=self.room_filter.get(),
-                    co_filter=self.co_filter.get(),
-                    include_archive=self.include_archive.get(),
+                    version_filter=version_filter_value,
+                    room_filter=room_filter_value,
+                    co_filter=co_filter_value,
+                    include_archive=include_archive_value,
                     choose_mode=choose_mode,
-                    debug_mode=self.debug_mode.get(),
-                    training_data=self.training_mode.get()
+                    debug_mode=debug_mode_value,
+                    training_data=training_mode_value
                 )
                 self.result_queue.put({
                     'type': 'document_navigation',
@@ -918,7 +979,57 @@ class ProjectQuickNavGUI:
     def toggle_always_on_top(self):
         """Toggle always on top mode."""
         current = self.root.attributes('-topmost')
-        self.root.attributes('-topmost', not current)
+        new_state = not current
+        self.root.attributes('-topmost', new_state)
+
+        # Save the preference
+        self.settings.set("ui.always_on_top", new_state)
+
+    def restore_window_state(self):
+        """Restore window state from settings."""
+        try:
+            # Restore always on top setting
+            always_on_top = self.settings.get("ui.always_on_top", False)
+            self.root.attributes('-topmost', always_on_top)
+
+            # Ensure window is visible and properly positioned
+            geometry = self.settings.get_window_geometry()
+            if geometry:
+                # Parse geometry to ensure it's on screen
+                if self._is_geometry_on_screen(geometry):
+                    self.root.geometry(geometry)
+                else:
+                    # Reset to default if off-screen
+                    self.root.geometry("520x820")
+                    logger.info("Window was off-screen, reset to default geometry")
+
+        except Exception as e:
+            logger.warning(f"Failed to restore window state: {e}")
+
+    def _is_geometry_on_screen(self, geometry: str) -> bool:
+        """Check if geometry would place window on screen."""
+        try:
+            # Parse geometry string: "WxH+X+Y" or "WxH"
+            if '+' in geometry:
+                size_part, pos_part = geometry.split('+', 1)
+                width, height = map(int, size_part.split('x'))
+                pos_parts = pos_part.split('+')
+                x = int(pos_parts[0]) if pos_parts[0] else 0
+                y = int(pos_parts[1]) if len(pos_parts) > 1 and pos_parts[1] else 0
+
+                # Get screen dimensions
+                screen_width = self.root.winfo_screenwidth()
+                screen_height = self.root.winfo_screenheight()
+
+                # Check if window would be mostly visible
+                return (x >= -width//2 and y >= -height//2 and
+                       x < screen_width - width//2 and y < screen_height - height//2)
+            else:
+                # No position specified, just size - that's fine
+                return True
+
+        except Exception:
+            return False
 
     # Settings and dialogs
     def show_settings(self):
@@ -935,9 +1046,11 @@ class ProjectQuickNavGUI:
         dialog.show()
 
     def _initialize_ai(self):
-        """Initialize AI components if enabled."""
-        if AIClient is None or AIChatWidget is None:
+        """Initialize AI components if enabled with improved error handling."""
+        if not AI_AVAILABLE:
             self.ai_enabled.set(False)
+            if AI_IMPORT_ERROR:
+                logger.info(f"AI features disabled due to import error: {AI_IMPORT_ERROR}")
             return
 
         # Check if AI is enabled in settings
@@ -946,9 +1059,22 @@ class ProjectQuickNavGUI:
 
         if ai_enabled:
             try:
+                # Check for required dependencies
+                if not OPTIONAL_DEPS['litellm']:
+                    logger.warning("AI enabled but LiteLLM not available. Install with: pip install litellm")
+                    self.ai_enabled.set(False)
+                    return
+
                 # Initialize AI client
                 self.ai_client = AIClient(controller=self.controller, settings=self.settings)
-                logger.info("AI client initialized successfully")
+
+                # Verify client is functional
+                if self.ai_client and self.ai_client.is_available():
+                    logger.info("AI client initialized successfully")
+                else:
+                    logger.warning("AI client initialized but not available")
+                    self.ai_enabled.set(False)
+
             except Exception as e:
                 logger.error(f"Failed to initialize AI client: {e}")
                 self.ai_enabled.set(False)
@@ -988,13 +1114,13 @@ class ProjectQuickNavGUI:
         """Update AI-related UI elements with enhanced styling."""
         if hasattr(self, 'ai_toggle_button'):
             if self.ai_enabled.get():
-                self.ai_toggle_button.config(text="🔌 Disable AI")
+                self.ai_toggle_button.config(text="Disable AI")
                 self.ai_chat_button.config(state=tk.NORMAL)
-                self.ai_status_label.config(text="Status: ✅ Enabled")
+                self.ai_status_label.config(text="Status: Enabled")
             else:
-                self.ai_toggle_button.config(text="🔌 Enable AI")
+                self.ai_toggle_button.config(text="Enable AI")
                 self.ai_chat_button.config(state=tk.DISABLED)
-                self.ai_status_label.config(text="Status: ❌ Disabled")
+                self.ai_status_label.config(text="Status: Disabled")
 
     def toggle_ai_panel(self):
         """Toggle AI chat panel visibility."""
@@ -1100,6 +1226,15 @@ For more help, visit the project documentation."""
 
     def on_closing(self):
         """Handle window closing."""
+        # Save current window geometry
+        try:
+            current_geometry = self.root.geometry()
+            if current_geometry:
+                self.settings.set_window_geometry(current_geometry)
+                logger.debug(f"Saved window geometry: {current_geometry}")
+        except Exception as e:
+            logger.warning(f"Failed to save window geometry: {e}")
+
         # Save settings before closing
         self.settings.save()
 
@@ -1143,6 +1278,103 @@ For more help, visit the project documentation."""
             logger.warning("Global hotkey support not available")
         except Exception as e:
             logger.warning(f"Failed to set up global hotkey: {e}")
+
+    def get_hotkey_manager(self):
+        """Get the hotkey manager instance."""
+        return getattr(self, 'hotkey_manager', None)
+
+    def register_hotkey(self, hotkey: str, callback) -> bool:
+        """Register a new global hotkey."""
+        if hasattr(self, 'hotkey_manager') and self.hotkey_manager:
+            try:
+                return self.hotkey_manager.register_hotkey(hotkey, callback)
+            except Exception as e:
+                logger.error(f"Failed to register hotkey {hotkey}: {e}")
+                return False
+        return False
+
+    def unregister_hotkey(self, hotkey: str) -> bool:
+        """Unregister a global hotkey."""
+        if hasattr(self, 'hotkey_manager') and self.hotkey_manager:
+            try:
+                return self.hotkey_manager.unregister_hotkey(hotkey)
+            except Exception as e:
+                logger.error(f"Failed to unregister hotkey {hotkey}: {e}")
+                return False
+        return False
+
+    def get_registered_hotkeys(self) -> List[str]:
+        """Get list of registered hotkeys."""
+        if hasattr(self, 'hotkey_manager') and self.hotkey_manager:
+            try:
+                return self.hotkey_manager.get_registered_hotkeys()
+            except Exception as e:
+                logger.error(f"Failed to get registered hotkeys: {e}")
+                return []
+        return []
+
+    def is_hotkey_available(self, hotkey: str) -> bool:
+        """Check if a hotkey is available for registration."""
+        if hasattr(self, 'hotkey_manager') and self.hotkey_manager:
+            try:
+                return self.hotkey_manager.is_hotkey_available(hotkey)
+            except Exception as e:
+                logger.error(f"Failed to check hotkey availability: {e}")
+                return False
+        return False
+
+    def get_dependency_status(self) -> Dict[str, Any]:
+        """Get status of optional dependencies."""
+        return {
+            'ai_available': AI_AVAILABLE,
+            'ai_error': AI_IMPORT_ERROR,
+            'optional_deps': OPTIONAL_DEPS.copy(),
+            'ai_client_ready': hasattr(self, 'ai_client') and self.ai_client and self.ai_client.is_available(),
+            'hotkey_manager_ready': hasattr(self, 'hotkey_manager') and self.hotkey_manager is not None
+        }
+
+    def show_dependency_status(self):
+        """Show a dialog with dependency status."""
+        status = self.get_dependency_status()
+
+        message = "Dependency Status:\n\n"
+
+        # Core components
+        message += "Core Components:\n"
+        message += f"✓ GUI Controller: Available\n"
+        message += f"✓ Settings Manager: Available\n"
+        message += f"✓ Theme Manager: Available\n\n"
+
+        # AI Components
+        message += "AI Components:\n"
+        if status['ai_available']:
+            message += f"✓ AI Client: Available\n"
+            if status['ai_client_ready']:
+                message += f"✓ AI Client Ready: Yes\n"
+            else:
+                message += f"⚠ AI Client Ready: No\n"
+        else:
+            message += f"✗ AI Client: Not Available\n"
+            if status['ai_error']:
+                message += f"  Error: {status['ai_error']}\n"
+
+        # Optional Dependencies
+        message += "\nOptional Dependencies:\n"
+        for dep, available in status['optional_deps'].items():
+            icon = "✓" if available else "✗"
+            message += f"{icon} {dep}: {'Available' if available else 'Not Available'}\n"
+
+        # Installation suggestions
+        missing_deps = [dep for dep, available in status['optional_deps'].items() if not available]
+        if missing_deps:
+            message += f"\nTo install missing dependencies:\n"
+            message += f"pip install {' '.join(missing_deps)}\n"
+
+        # Hardware features
+        message += "\nFeature Status:\n"
+        message += f"{'✓' if status['hotkey_manager_ready'] else '✗'} Global Hotkeys: {'Available' if status['hotkey_manager_ready'] else 'Not Available'}\n"
+
+        messagebox.showinfo("Dependency Status", message)
 
 
 def main():

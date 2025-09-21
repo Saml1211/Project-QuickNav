@@ -185,10 +185,12 @@ class ThemeManager:
                     "fg": "#000000"
                 },
                 "button": {
-                    "normal": {"bg": "#ffffff", "fg": "#000000"},
-                    "hover": {"bg": "#e1ecf4", "fg": "#000000"},
-                    "pressed": {"bg": "#cce4f7", "fg": "#000000"},
-                    "disabled": {"bg": "#f0f0f0", "fg": "#a0a0a0"}
+                    "normal": {"bg": "#ffffff", "fg": "#000000", "border": "#d0d0d0"},
+                    "hover": {"bg": "#e1ecf4", "fg": "#000000", "border": "#b3c7d6"},
+                    "pressed": {"bg": "#cce4f7", "fg": "#000000", "border": "#9db4c7"},
+                    "disabled": {"bg": "#f0f0f0", "fg": "#a0a0a0", "border": "#e0e0e0"},
+                    "primary": {"bg": "#0078d4", "fg": "#ffffff", "border": "#106ebe"},
+                    "primary_hover": {"bg": "#106ebe", "fg": "#ffffff", "border": "#005a9e"}
                 },
                 "entry": {
                     "normal": {"bg": "#ffffff", "fg": "#000000"},
@@ -202,6 +204,9 @@ class ThemeManager:
                 "label": {
                     "normal": {"bg": "#ffffff", "fg": "#000000"},
                     "disabled": {"bg": "#ffffff", "fg": "#a0a0a0"}
+                },
+                "labelframe": {
+                    "normal": {"bg": "#ffffff", "fg": "#000000", "border": "#d0d0d0"}
                 },
                 "text": {
                     "normal": {"bg": "#ffffff", "fg": "#000000"},
@@ -278,10 +283,12 @@ class ThemeManager:
                     "fg": "#ffffff"
                 },
                 "button": {
-                    "normal": {"bg": "#3c3c3c", "fg": "#ffffff"},
-                    "hover": {"bg": "#464647", "fg": "#ffffff"},
-                    "pressed": {"bg": "#525252", "fg": "#ffffff"},
-                    "disabled": {"bg": "#404040", "fg": "#808080"}
+                    "normal": {"bg": "#3c3c3c", "fg": "#ffffff", "border": "#5a5a5a"},
+                    "hover": {"bg": "#464647", "fg": "#ffffff", "border": "#646464"},
+                    "pressed": {"bg": "#525252", "fg": "#ffffff", "border": "#6e6e6e"},
+                    "disabled": {"bg": "#404040", "fg": "#808080", "border": "#505050"},
+                    "primary": {"bg": "#0078d4", "fg": "#ffffff", "border": "#106ebe"},
+                    "primary_hover": {"bg": "#106ebe", "fg": "#ffffff", "border": "#005a9e"}
                 },
                 "entry": {
                     "normal": {"bg": "#1e1e1e", "fg": "#ffffff"},
@@ -295,6 +302,9 @@ class ThemeManager:
                 "label": {
                     "normal": {"bg": "#2d2d30", "fg": "#ffffff"},
                     "disabled": {"bg": "#2d2d30", "fg": "#808080"}
+                },
+                "labelframe": {
+                    "normal": {"bg": "#2d2d30", "fg": "#ffffff", "border": "#5a5a5a"}
                 },
                 "text": {
                     "normal": {"bg": "#1e1e1e", "fg": "#ffffff"},
@@ -539,6 +549,19 @@ class ThemeManager:
                 ]
             )
 
+        # Ensure consistent button text colors
+        self.style.configure("TButton",
+            foreground=theme.get_color("fg")
+        )
+
+        # Configure button text to ensure visibility
+        if self.current_theme == "dark":
+            # Force white text on dark buttons
+            self.style.configure("TButton", foreground="#ffffff")
+        else:
+            # Force dark text on light buttons
+            self.style.configure("TButton", foreground="#000000")
+
         # Configure TButton
         button_style = theme.get_style("button")
         button_colors = button_style["colors"]
@@ -572,7 +595,12 @@ class ThemeManager:
                 foreground=[
                     ("active", hover.get("fg", normal.get("fg"))),
                     ("pressed", pressed.get("fg", normal.get("fg"))),
-                    ("disabled", disabled.get("fg", normal.get("fg")))
+                    ("disabled", disabled.get("fg", theme.get_color("disabled_fg")))
+                ],
+                bordercolor=[
+                    ("active", hover.get("border", normal.get("border", theme.get_color("border")))),
+                    ("pressed", pressed.get("border", normal.get("border", theme.get_color("border")))),
+                    ("focus", theme.get_color("focus"))
                 ]
             )
 
@@ -583,20 +611,44 @@ class ThemeManager:
                     foreground=primary.get("fg", theme.get_color("select_fg")),
                     borderwidth=1,
                     relief="flat",
-                    bordercolor=primary.get("border", primary.get("bg")),
+                    bordercolor=primary.get("border", primary.get("bg", theme.get_color("select_bg"))),
                     focuscolor=theme.get_color("focus"),
                     padding=(theme.get_geometry("element").get("button_padding", 12), 6)
                 )
 
                 self.style.map("Primary.TButton",
                     background=[
-                        ("active", primary_hover.get("bg", primary.get("bg"))),
-                        ("pressed", primary_hover.get("bg", primary.get("bg"))),
+                        ("active", primary_hover.get("bg", primary.get("bg", theme.get_color("select_bg")))),
+                        ("pressed", primary_hover.get("bg", primary.get("bg", theme.get_color("select_bg")))),
                         ("disabled", disabled.get("bg", normal.get("bg")))
                     ],
                     foreground=[
-                        ("active", primary_hover.get("fg", primary.get("fg"))),
-                        ("pressed", primary_hover.get("fg", primary.get("fg"))),
+                        ("active", primary_hover.get("fg", primary.get("fg", theme.get_color("select_fg")))),
+                        ("pressed", primary_hover.get("fg", primary.get("fg", theme.get_color("select_fg")))),
+                        ("disabled", disabled.get("fg", normal.get("fg")))
+                    ]
+                )
+            else:
+                # Fallback primary button style for themes without explicit primary colors
+                self.style.configure("Primary.TButton",
+                    background=theme.get_color("select_bg"),
+                    foreground=theme.get_color("select_fg"),
+                    borderwidth=1,
+                    relief="flat",
+                    bordercolor=theme.get_color("select_bg"),
+                    focuscolor=theme.get_color("focus"),
+                    padding=(theme.get_geometry("element").get("button_padding", 12), 6)
+                )
+
+                self.style.map("Primary.TButton",
+                    background=[
+                        ("active", theme.get_color("active_bg")),
+                        ("pressed", theme.get_color("active_bg")),
+                        ("disabled", disabled.get("bg", normal.get("bg")))
+                    ],
+                    foreground=[
+                        ("active", theme.get_color("select_fg")),
+                        ("pressed", theme.get_color("select_fg")),
                         ("disabled", disabled.get("fg", normal.get("fg")))
                     ]
                 )
@@ -658,20 +710,30 @@ class ThemeManager:
         labelframe_style = theme.get_style("labelframe")
         labelframe_colors = labelframe_style.get("colors", {})
 
+        # Safe color extraction for labelframe
+        if isinstance(labelframe_colors, dict) and "normal" in labelframe_colors:
+            bg_color = labelframe_colors["normal"].get("bg", theme.get_color("bg"))
+            fg_color = labelframe_colors["normal"].get("fg", theme.get_color("fg"))
+            border_color = labelframe_colors["normal"].get("border", theme.get_color("border"))
+        else:
+            bg_color = theme.get_color("bg")
+            fg_color = theme.get_color("fg")
+            border_color = theme.get_color("border")
+
         self.style.configure("TLabelframe",
-            background=labelframe_colors.get("bg", theme.get_color("frame", "bg")),
+            background=bg_color,
             borderwidth=1,
-            bordercolor=labelframe_colors.get("border", theme.get_color("border")),
+            bordercolor=border_color,
             relief="solid",
             padding=(theme.get_geometry("element").get("section_spacing", 16), 12)
         )
 
         self.style.configure("TLabelframe.Label",
-            background=labelframe_colors.get("bg", theme.get_color("frame", "bg")),
-            foreground=labelframe_colors.get("fg", theme.get_color("frame", "fg")),
+            background=bg_color,
+            foreground=fg_color,
             font=(theme.get_font("subheading").get("family", "Segoe UI"),
-                  theme.get_font("subheading").get("size", 12),
-                  theme.get_font("subheading").get("weight", "medium"))
+                  theme.get_font("subheading").get("size", 11),
+                  theme.get_font("subheading").get("weight", "bold"))
         )
 
         # Configure TCombobox
