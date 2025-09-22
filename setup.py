@@ -21,7 +21,7 @@ setup(
     python_requires=">=3.8",
     include_package_data=True,
     package_data={
-        "": ["VERSION.txt"],
+        "": ["VERSION.txt", "training_data/*.json"],
     },
     entry_points={
         "console_scripts": [

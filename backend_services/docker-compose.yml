@@ -1,0 +1,396 @@
+# Docker Compose configuration for Project QuickNav Backend Services
+# This orchestrates all backend services, databases, and supporting infrastructure
+
+version: '3.8'
+
+services:
+  # ================================================================
+  # DATABASES AND INFRASTRUCTURE
+  # ================================================================
+
+  # PostgreSQL for structured data
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: quicknav
+      POSTGRES_USER: quicknav
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-quicknav_password}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+      - ./database/seed.sql:/docker-entrypoint-initdb.d/02-seed.sql
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U quicknav"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - quicknav-network
+
+  # Redis for caching and session management
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - quicknav-network
+
+  # Elasticsearch for full-text search
+  elasticsearch:
+    image: elasticsearch:8.11.0
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - bootstrap.memory_lock=true
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - quicknav-network
+
+  # RabbitMQ for message queuing
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: quicknav
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-quicknav_password}
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"  # Management UI
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - quicknav-network
+
+  # ================================================================
+  # CORE BACKEND SERVICES
+  # ================================================================
+
+  # API Gateway
+  api-gateway:
+    build:
+      context: .
+      dockerfile: api_gateway/Dockerfile
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - ANALYTICS_SERVICE_URL=http://analytics-service:8001
+      - RECOMMENDATION_SERVICE_URL=http://recommendation-service:8002
+      - SEARCH_SERVICE_URL=http://search-service:8003
+      - PREDICTION_SERVICE_URL=http://prediction-service:8004
+      - ML_SERVICE_URL=http://ml-service:8005
+      - LOG_LEVEL=INFO
+    ports:
+      - "8000:8000"
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+    networks:
+      - quicknav-network
+
+  # Analytics Service
+  analytics-service:
+    build:
+      context: .
+      dockerfile: analytics_service/Dockerfile
+    environment:
+      - DATABASE_URL=postgresql://quicknav:${POSTGRES_PASSWORD:-quicknav_password}@postgres:5432/quicknav_analytics
+      - REDIS_URL=redis://redis:6379
+      - LOG_LEVEL=INFO
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8001/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+    networks:
+      - quicknav-network
+
+  # Recommendation Service
+  recommendation-service:
+    build:
+      context: .
+      dockerfile: recommendation_service/Dockerfile
+    environment:
+      - DATABASE_URL=postgresql://quicknav:${POSTGRES_PASSWORD:-quicknav_password}@postgres:5432/quicknav_recommendations
+      - REDIS_URL=redis://redis:6379
+      - LOG_LEVEL=INFO
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8002/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+    networks:
+      - quicknav-network
+
+  # Enhanced Search Service
+  search-service:
+    build:
+      context: .
+      dockerfile: search_service/Dockerfile
+    environment:
+      - DATABASE_URL=postgresql://quicknav:${POSTGRES_PASSWORD:-quicknav_password}@postgres:5432/quicknav_search
+      - ELASTICSEARCH_URL=http://elasticsearch:9200
+      - REDIS_URL=redis://redis:6379
+      - LOG_LEVEL=INFO
+    depends_on:
+      postgres:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8003/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+    networks:
+      - quicknav-network
+
+  # Predictive Navigation Service
+  prediction-service:
+    build:
+      context: .
+      dockerfile: prediction_service/Dockerfile
+    environment:
+      - DATABASE_URL=postgresql://quicknav:${POSTGRES_PASSWORD:-quicknav_password}@postgres:5432/quicknav_predictions
+      - REDIS_URL=redis://redis:6379
+      - RABBITMQ_URL=amqp://quicknav:${RABBITMQ_PASSWORD:-quicknav_password}@rabbitmq:5672/
+      - LOG_LEVEL=INFO
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8004/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+    networks:
+      - quicknav-network
+
+  # ML Model Service
+  ml-service:
+    build:
+      context: .
+      dockerfile: ml_service/Dockerfile
+    environment:
+      - MODEL_STORAGE_PATH=/app/models
+      - REDIS_URL=redis://redis:6379
+      - LOG_LEVEL=INFO
+    volumes:
+      - ml_models:/app/models
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8005/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+    networks:
+      - quicknav-network
+
+  # Data Ingestion Service
+  data-ingestion:
+    build:
+      context: .
+      dockerfile: data_ingestion/Dockerfile
+    environment:
+      - RABBITMQ_URL=amqp://quicknav:${RABBITMQ_PASSWORD:-quicknav_password}@rabbitmq:5672/
+      - SEARCH_SERVICE_URL=http://search-service:8003
+      - ANALYTICS_SERVICE_URL=http://analytics-service:8001
+      - ONEDRIVE_WATCH_PATH=${ONEDRIVE_PATH:-/mnt/onedrive}
+      - LOG_LEVEL=INFO
+    volumes:
+      - ${ONEDRIVE_PATH:-./test_data}:/mnt/onedrive:ro
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      search-service:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - quicknav-network
+
+  # ================================================================
+  # MONITORING AND OBSERVABILITY
+  # ================================================================
+
+  # Prometheus for metrics collection
+  prometheus:
+    image: prom/prometheus:latest
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    networks:
+      - quicknav-network
+
+  # Grafana for visualization
+  grafana:
+    image: grafana/grafana:latest
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+    networks:
+      - quicknav-network
+
+  # Jaeger for distributed tracing
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    environment:
+      - COLLECTOR_ZIPKIN_HOST_PORT=:9411
+    ports:
+      - "16686:16686"
+      - "14268:14268"
+      - "14250:14250"
+      - "9411:9411"
+    networks:
+      - quicknav-network
+
+  # ================================================================
+  # NGINX REVERSE PROXY
+  # ================================================================
+
+  nginx:
+    image: nginx:alpine
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./nginx/ssl:/etc/nginx/ssl
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - api-gateway
+    restart: unless-stopped
+    networks:
+      - quicknav-network
+
+  # ================================================================
+  # UTILITY SERVICES
+  # ================================================================
+
+  # pgAdmin for database management
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@quicknav.com
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgres
+    networks:
+      - quicknav-network
+
+  # File browser for OneDrive data exploration
+  filebrowser:
+    image: filebrowser/filebrowser:latest
+    environment:
+      - FB_BASEURL=/files
+    volumes:
+      - ${ONEDRIVE_PATH:-./test_data}:/srv:ro
+      - filebrowser_data:/database
+    ports:
+      - "8080:80"
+    networks:
+      - quicknav-network
+
+# ================================================================
+# NETWORKS AND VOLUMES
+# ================================================================
+
+networks:
+  quicknav-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  elasticsearch_data:
+    driver: local
+  rabbitmq_data:
+    driver: local
+  ml_models:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+  pgadmin_data:
+    driver: local
+  filebrowser_data:
+    driver: local
