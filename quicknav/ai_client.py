@@ -22,6 +22,12 @@ import os
 import re
 from pathlib import Path
 
+# Import secure credential manager
+try:
+    from .secure_credentials import get_credential_manager
+except ImportError:
+    from secure_credentials import get_credential_manager
+
 logger = logging.getLogger(__name__)
 
 try:
@@ -159,11 +165,25 @@ class AIClient:
         # Configure logging
         litellm.set_verbose = False
 
-        # Set API keys from environment or settings
+        # Set API keys from secure credential manager
+        credential_manager = get_credential_manager()
+        stored_providers = credential_manager.list_stored_providers()
+        
+        for provider in stored_providers:
+            api_key = credential_manager.get_api_key(provider)
+            if api_key:
+                os.environ[f"{provider.upper()}_API_KEY"] = api_key
+                logger.debug(f"Loaded API key for {provider} from secure storage")
+
+        # Fallback: check for any plaintext API keys in settings and migrate them
         if self.settings:
-            api_keys = self.settings.get("ai.api_keys", {})
-            for provider, key in api_keys.items():
-                os.environ[f"{provider.upper()}_API_KEY"] = key
+            plaintext_keys = self.settings.get("ai.api_keys", {})
+            if plaintext_keys:
+                logger.warning("Found plaintext API keys in settings, migrating to secure storage")
+                if credential_manager.migrate_from_plaintext(plaintext_keys):
+                    # Clear plaintext keys from settings after successful migration
+                    self.settings.set("ai.api_keys", {})
+                    logger.info("API keys migrated to secure storage and removed from plaintext")
 
         # Configure default model
         self.default_model = self._get_default_model()

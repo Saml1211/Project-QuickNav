@@ -944,8 +944,11 @@ class ProjectQuickNavGUI:
                     subprocess.run(['open', path], check=False)
                 else:  # Linux
                     subprocess.run(['xdg-open', path], check=False)
-        except Exception as e:
+        except (OSError, subprocess.CalledProcessError, FileNotFoundError) as e:
             logger.exception("Failed to open file")
+            self._show_error(f"Failed to open file: {e}")
+        except Exception as e:
+            logger.error(f"Unexpected error opening file {path}: {e}")
             self._show_error(f"Failed to open file: {e}")
 
     def _show_error(self, message: str):
@@ -1004,8 +1007,10 @@ class ProjectQuickNavGUI:
                     self.root.geometry("520x820")
                     logger.info("Window was off-screen, reset to default geometry")
 
+        except (tk.TclError, ValueError, KeyError) as e:
+            logger.warning(f"Window state restoration error: {e}")
         except Exception as e:
-            logger.warning(f"Failed to restore window state: {e}")
+            logger.error(f"Unexpected error restoring window state: {e}")
 
     def _is_geometry_on_screen(self, geometry: str) -> bool:
         """Check if geometry would place window on screen."""
@@ -1029,7 +1034,11 @@ class ProjectQuickNavGUI:
                 # No position specified, just size - that's fine
                 return True
 
-        except Exception:
+        except (ValueError, IndexError, AttributeError) as e:
+            logger.debug(f"Geometry parsing error: {e}")
+            return False
+        except Exception as e:
+            logger.warning(f"Unexpected error checking geometry: {e}")
             return False
 
     # Settings and dialogs
@@ -1076,8 +1085,11 @@ class ProjectQuickNavGUI:
                     logger.warning("AI client initialized but not available")
                     self.ai_enabled.set(False)
 
+            except (ImportError, AttributeError, TypeError) as e:
+                logger.error(f"AI client initialization error: {e}")
+                self.ai_enabled.set(False)
             except Exception as e:
-                logger.error(f"Failed to initialize AI client: {e}")
+                logger.error(f"Unexpected error initializing AI client: {e}")
                 self.ai_enabled.set(False)
 
     def toggle_ai(self):

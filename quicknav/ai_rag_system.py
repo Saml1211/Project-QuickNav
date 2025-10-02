@@ -19,6 +19,7 @@ import logging
 import asyncio
 import hashlib
 import pickle
+import threading
 from typing import Dict, List, Any, Optional, Tuple, Set, Union
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -176,13 +177,22 @@ class VectorStore:
         self.dimension = dimension
         self.index_path = Path(index_path)
         self.index_path.mkdir(parents=True, exist_ok=True)
+        self._local = threading.local()
+        self._lock = threading.Lock()
 
         self.index = None
-        self.metadata_db = None
         self.document_chunks = {}
 
         self._initialize_index()
         self._initialize_metadata_db()
+
+    def _get_metadata_db(self) -> sqlite3.Connection:
+        """Get a thread-local SQLite connection for metadata."""
+        if not hasattr(self._local, 'metadata_db'):
+            db_path = self.index_path / "metadata.db"
+            self._local.metadata_db = sqlite3.connect(str(db_path))
+            logger.debug(f"Created new metadata DB connection for thread {threading.current_thread().name}")
+        return self._local.metadata_db
 
     def _initialize_index(self):
         """Initialize the vector index."""
@@ -221,11 +231,10 @@ class VectorStore:
 
     def _initialize_metadata_db(self):
         """Initialize SQLite database for metadata storage."""
-        db_path = self.index_path / "metadata.db"
-        self.metadata_db = sqlite3.connect(str(db_path), check_same_thread=False)
+        metadata_db = self._get_metadata_db()
 
         # Create tables
-        self.metadata_db.execute("""
+        metadata_db.execute("""
             CREATE TABLE IF NOT EXISTS document_metadata (
                 chunk_id TEXT PRIMARY KEY,
                 document_path TEXT,
@@ -238,7 +247,7 @@ class VectorStore:
             )
         """)
 
-        self.metadata_db.execute("""
+        metadata_db.execute("""
             CREATE TABLE IF NOT EXISTS search_stats (
                 query_hash TEXT PRIMARY KEY,
                 query_text TEXT,
@@ -249,7 +258,7 @@ class VectorStore:
             )
         """)
 
-        self.metadata_db.commit()
+        metadata_db.commit()
 
     async def add_documents(self, chunks: List[DocumentChunk]):
         """Add document chunks to the vector store."""
@@ -277,11 +286,12 @@ class VectorStore:
                     self.index['ids'].append(chunks[i].chunk_id)
 
             # Store metadata in database
+            metadata_db = self._get_metadata_db()
             for i, chunk in enumerate(chunks):
                 chunk.embedding = embeddings[i]
                 self.document_chunks[chunk.chunk_id] = chunk
 
-                self.metadata_db.execute("""
+                metadata_db.execute("""
                     INSERT OR REPLACE INTO document_metadata
                     (chunk_id, document_path, project_name, document_name, content_preview, metadata, created_at, updated_at)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -296,7 +306,7 @@ class VectorStore:
                     datetime.now()
                 ))
 
-            self.metadata_db.commit()
+            metadata_db.commit()
             logger.info(f"Added {len(chunks)} document chunks to vector store")
 
         except Exception as e:

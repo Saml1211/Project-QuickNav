@@ -80,8 +80,31 @@ class MessageBubble(ttk.Frame):
 
     def _get_safe_color(self, element: str, default: str) -> str:
         """Get a safe color string, always returning a valid hex color."""
-        # Always return the default for now to ensure stability
+        # First try to get color from theme
+        theme_color = self._get_theme_color(element, default)
+        
+        # Validate that it's a proper hex color
+        if self._is_valid_hex_color(theme_color):
+            return theme_color
+        
+        # Fallback to default if theme color is invalid
         return default
+
+    def _is_valid_hex_color(self, color: str) -> bool:
+        """Validate if a string is a valid hex color."""
+        if not isinstance(color, str):
+            return False
+        
+        # Check if it's a valid hex color pattern
+        if re.match(r'^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$', color):
+            return True
+        
+        # Check if it's a valid named color (basic ones)
+        named_colors = {
+            'black', 'white', 'red', 'green', 'blue', 'yellow', 'cyan', 'magenta',
+            'gray', 'grey', 'darkgray', 'darkgrey', 'lightgray', 'lightgrey'
+        }
+        return color.lower() in named_colors
 
     def _get_theme_color(self, element: str, default: str) -> str:
         """Get color from theme manager or use default."""
@@ -106,8 +129,9 @@ class MessageBubble(ttk.Frame):
                                     return value
                     elif isinstance(color, str) and color.startswith("#"):
                         return color
-        except Exception:
-            # Silently fall back to default if theme access fails
+        except (AttributeError, KeyError, TypeError, ValueError) as e:
+            # Log specific theme access errors for debugging
+            logger.debug(f"Theme color access failed for element '{element}': {e}")
             pass
         return default
 

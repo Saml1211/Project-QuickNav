@@ -112,7 +112,11 @@ class ThemeManager:
                 value, _ = winreg.QueryValueEx(key, "AppsUseLightTheme")
                 return "light" if value else "dark"
 
-        except Exception:
+        except (ImportError, OSError, FileNotFoundError) as e:
+            logger.debug(f"Windows theme detection failed: {e}")
+            return "light"
+        except Exception as e:
+            logger.warning(f"Unexpected error detecting Windows theme: {e}")
             return "light"
 
     def _detect_macos_theme(self) -> str:
@@ -126,7 +130,11 @@ class ThemeManager:
             )
             return "dark" if "Dark" in result.stdout else "light"
 
-        except Exception:
+        except (subprocess.CalledProcessError, FileNotFoundError, OSError) as e:
+            logger.debug(f"macOS theme detection failed: {e}")
+            return "light"
+        except Exception as e:
+            logger.warning(f"Unexpected error detecting macOS theme: {e}")
             return "light"
 
     def _detect_linux_theme(self) -> str:
@@ -151,8 +159,10 @@ class ThemeManager:
             except:
                 pass
 
-        except Exception:
-            pass
+        except (OSError, FileNotFoundError, subprocess.CalledProcessError) as e:
+            logger.debug(f"Linux theme detection failed: {e}")
+        except Exception as e:
+            logger.warning(f"Unexpected error detecting Linux theme: {e}")
 
         return "light"
 

@@ -17,6 +17,7 @@ import json
 import logging
 import asyncio
 import sqlite3
+import threading
 from typing import Dict, List, Any, Optional, Tuple, Set
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -86,12 +87,88 @@ class AnalyticsDatabase:
     def __init__(self, db_path: str = "data/analytics.db"):
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        self.conn = sqlite3.connect(str(self.db_path), check_same_thread=False)
+        self._local = threading.local()
+        self._lock = threading.Lock()
         self._initialize_tables()
+
+    def _build_events_query(self, user_id: Optional[str] = None, event_type: Optional[str] = None,
+                           start_date: Optional[datetime] = None, end_date: Optional[datetime] = None,
+                           limit: int = 1000) -> Tuple[str, List[Any]]:
+        """Build a safe parameterized query for events with validation."""
+        # Validate limit to prevent potential DoS
+        limit = max(1, min(limit, 10000))  # Clamp between 1 and 10000
+        
+        # Build WHERE clauses safely using a list approach
+        where_clauses = []
+        params = []
+        
+        if user_id is not None and user_id.strip():  # Validate non-empty
+            where_clauses.append("user_id = ?")
+            params.append(user_id.strip())
+        
+        if event_type is not None and event_type.strip():
+            where_clauses.append("event_type = ?")
+            params.append(event_type.strip())
+        
+        if start_date is not None:
+            where_clauses.append("timestamp >= ?")
+            params.append(start_date.isoformat())
+        
+        if end_date is not None:
+            where_clauses.append("timestamp <= ?")
+            params.append(end_date.isoformat())
+        
+        # Construct query safely
+        base_query = "SELECT * FROM usage_events"
+        if where_clauses:
+            where_clause = " WHERE " + " AND ".join(where_clauses)
+        else:
+            where_clause = ""
+        
+        order_clause = " ORDER BY timestamp DESC"
+        limit_clause = " LIMIT ?"
+        params.append(limit)
+        
+        final_query = base_query + where_clause + order_clause + limit_clause
+        return final_query, params
+
+    def _build_insights_query(self, project_id: Optional[str] = None,
+                             insight_type: Optional[str] = None) -> Tuple[str, List[Any]]:
+        """Build a safe parameterized query for insights with validation."""
+        where_clauses = []
+        params = []
+        
+        if project_id is not None and project_id.strip():
+            where_clauses.append("project_id = ?")
+            params.append(project_id.strip())
+        
+        if insight_type is not None and insight_type.strip():
+            where_clauses.append("insight_type = ?")
+            params.append(insight_type.strip())
+        
+        # Construct query safely
+        base_query = "SELECT * FROM project_insights"
+        if where_clauses:
+            where_clause = " WHERE " + " AND ".join(where_clauses)
+        else:
+            where_clause = ""
+        
+        order_clause = " ORDER BY confidence DESC, created_at DESC"
+        
+        final_query = base_query + where_clause + order_clause
+        return final_query, params
+
+    def _get_connection(self) -> sqlite3.Connection:
+        """Get a thread-local SQLite connection."""
+        if not hasattr(self._local, 'connection'):
+            self._local.connection = sqlite3.connect(str(self.db_path))
+            logger.debug(f"Created new SQLite connection for thread {threading.current_thread().name}")
+        return self._local.connection
 
     def _initialize_tables(self):
         """Initialize database tables."""
-        self.conn.executescript("""
+        conn = self._get_connection()
+        conn.executescript("""
             CREATE TABLE IF NOT EXISTS usage_events (
                 event_id TEXT PRIMARY KEY,
                 user_id TEXT,
@@ -136,12 +213,13 @@ class AnalyticsDatabase:
             CREATE INDEX IF NOT EXISTS idx_events_project ON usage_events(project_id);
             CREATE INDEX IF NOT EXISTS idx_insights_project ON project_insights(project_id);
         """)
-        self.conn.commit()
+        conn.commit()
 
     def log_event(self, event: UsageEvent):
         """Log a usage event."""
         try:
-            self.conn.execute("""
+            conn = self._get_connection()
+            conn.execute("""
                 INSERT OR REPLACE INTO usage_events
                 (event_id, user_id, event_type, timestamp, project_id, document_path,
                  query_text, success, duration_seconds, metadata)
@@ -152,7 +230,7 @@ class AnalyticsDatabase:
                 event.query_text, event.success, event.duration_seconds,
                 json.dumps(event.metadata)
             ))
-            self.conn.commit()
+            conn.commit()
         except Exception as e:
             logger.error(f"Failed to log event: {e}")
 
@@ -160,30 +238,18 @@ class AnalyticsDatabase:
                    start_date: Optional[datetime] = None, end_date: Optional[datetime] = None,
                    limit: int = 1000) -> List[UsageEvent]:
         """Retrieve usage events with filters."""
-        query = "SELECT * FROM usage_events WHERE 1=1"
-        params = []
-
-        if user_id:
-            query += " AND user_id = ?"
-            params.append(user_id)
-
-        if event_type:
-            query += " AND event_type = ?"
-            params.append(event_type)
-
-        if start_date:
-            query += " AND timestamp >= ?"
-            params.append(start_date.isoformat())
-
-        if end_date:
-            query += " AND timestamp <= ?"
-            params.append(end_date.isoformat())
-
-        query += " ORDER BY timestamp DESC LIMIT ?"
-        params.append(limit)
+        # Use a safer query builder approach
+        query, params = self._build_events_query(
+            user_id=user_id,
+            event_type=event_type, 
+            start_date=start_date,
+            end_date=end_date,
+            limit=limit
+        )
 
         try:
-            cursor = self.conn.execute(query, params)
+            conn = self._get_connection()
+            cursor = conn.execute(query, params)
             events = []
 
             for row in cursor.fetchall():
@@ -211,8 +277,9 @@ class AnalyticsDatabase:
         """Store a project insight."""
         try:
             insight_id = f"{insight.project_id}_{insight.insight_type}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-
-            self.conn.execute("""
+            conn = self._get_connection()
+            
+            conn.execute("""
                 INSERT OR REPLACE INTO project_insights
                 (insight_id, project_id, insight_type, title, description,
                  confidence, priority, actionable, recommendations, metadata, created_at)
@@ -224,29 +291,21 @@ class AnalyticsDatabase:
                 json.dumps(insight.recommendations), json.dumps(insight.metadata),
                 datetime.now().isoformat()
             ))
-            self.conn.commit()
+            conn.commit()
 
-        except Exception as e:
-            logger.error(f"Failed to store insight: {e}")
+        except sqlite3.Error as e:
+            logger.error(f"Database error storing insight: {e}")
+        except (TypeError, ValueError, json.JSONEncodeError) as e:
+            logger.error(f"Data validation error storing insight: {e}")
 
     def get_insights(self, project_id: Optional[str] = None,
                     insight_type: Optional[str] = None) -> List[ProjectInsight]:
-        """Get project insights."""
-        query = "SELECT * FROM project_insights WHERE 1=1"
-        params = []
-
-        if project_id:
-            query += " AND project_id = ?"
-            params.append(project_id)
-
-        if insight_type:
-            query += " AND insight_type = ?"
-            params.append(insight_type)
-
-        query += " ORDER BY confidence DESC, created_at DESC"
+        """Get project insights with safe query building."""
+        query, params = self._build_insights_query(project_id, insight_type)
 
         try:
-            cursor = self.conn.execute(query, params)
+            conn = self._get_connection()
+            cursor = conn.execute(query, params)
             insights = []
 
             for row in cursor.fetchall():
@@ -265,8 +324,11 @@ class AnalyticsDatabase:
 
             return insights
 
-        except Exception as e:
-            logger.error(f"Failed to get insights: {e}")
+        except sqlite3.Error as e:
+            logger.error(f"Database error getting insights: {e}")
+            return []
+        except (json.JSONDecodeError, ValueError) as e:
+            logger.error(f"Data parsing error getting insights: {e}")
             return []
 
 
