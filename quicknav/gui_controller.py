@@ -54,12 +54,26 @@ class GuiController:
         """Initialize backend components."""
         try:
             # Import backend modules
+            import sys
+            from pathlib import Path
+
+            # Add src to path for doc_navigator_functions
+            src_path = Path(__file__).parent.parent / 'src'
+            if str(src_path) not in sys.path:
+                sys.path.insert(0, str(src_path))
+
             from . import find_project_path
-            from . import doc_navigator
             from . import cli
 
+            # Import the document navigation function
+            try:
+                from doc_navigator_functions import navigate_to_document
+                self.doc_backend = type('DocBackend', (), {'navigate_to_document': staticmethod(navigate_to_document)})()
+            except ImportError:
+                logger.warning("doc_navigator_functions not available, using CLI fallback")
+                self.doc_backend = None
+
             self.project_backend = find_project_path
-            self.doc_backend = doc_navigator
             self.cli_backend = cli
 
             logger.info("Backend components initialized successfully")

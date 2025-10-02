@@ -156,6 +156,7 @@ class ProjectQuickNavGUI:
         self._setup_ui()
         self._setup_events()
         self._setup_validation()
+        self._setup_autocomplete()  # Initialize autocomplete system
         self._apply_theme()
 
         # Force widget refresh to ensure theme is visible
@@ -174,6 +175,9 @@ class ProjectQuickNavGUI:
         # Initialize navigation state
         self.last_search_result = None
         self.last_search_type = None
+
+        # Initialize tooltip system
+        self.tooltips = {}
 
         logger.info("ProjectQuickNavGUI initialized successfully")
 
@@ -263,11 +267,25 @@ class ProjectQuickNavGUI:
         )
         entry_padding = max(12, int(16 * self.dpi_scale))
         ipady_value = max(3, int(4 * self.dpi_scale))
-        self.project_entry.grid(row=0, column=0, sticky="ew", padx=entry_padding, pady=entry_padding, ipady=ipady_value)
+        self.project_entry.grid(row=0, column=0, sticky="ew", padx=entry_padding, pady=(entry_padding, 8), ipady=ipady_value)
 
         # Bind validation events
         self.project_entry.bind('<KeyRelease>', self._on_project_input_change)
         self.project_entry.bind('<FocusOut>', self._on_project_input_change)
+
+        # Recent projects frame
+        recent_frame = ttk.Frame(input_frame)
+        recent_frame.grid(row=1, column=0, sticky="ew", padx=entry_padding, pady=(0, entry_padding))
+
+        # Recent projects label
+        ttk.Label(recent_frame, text="⏱️ Recent:", font=("Segoe UI", 9)).pack(side="left", padx=(0, 8))
+
+        # Recent projects buttons container
+        self.recent_buttons_frame = ttk.Frame(recent_frame)
+        self.recent_buttons_frame.pack(side="left", fill="x", expand=True)
+
+        # Populate recent projects
+        self._update_recent_projects()
 
     def _create_navigation_mode_section(self):
         """Create navigation mode selection section with enhanced styling."""
@@ -280,7 +298,7 @@ class ProjectQuickNavGUI:
         mode_frame = ttk.Frame(nav_frame)
         mode_frame.pack(fill="x", padx=16, pady=16)
 
-        # Radio buttons for navigation mode with better styling
+        # Radio buttons for navigation mode with better styling and icons
         self.folder_radio = ttk.Radiobutton(
             mode_frame,
             text="📁 Open Project Folder",
@@ -289,15 +307,17 @@ class ProjectQuickNavGUI:
             command=self._on_mode_change
         )
         self.folder_radio.pack(anchor="w", pady=(0, 8))
+        self._add_tooltip(self.folder_radio, "Navigate directly to a project subfolder")
 
         self.doc_radio = ttk.Radiobutton(
             mode_frame,
-            text="Find Documents",
+            text="📄 Find Documents",
             variable=self.current_mode,
             value="document",
             command=self._on_mode_change
         )
         self.doc_radio.pack(anchor="w")
+        self._add_tooltip(self.doc_radio, "Search for specific documents within projects")
 
         # Remove standalone settings button - available via menu
 
@@ -307,27 +327,37 @@ class ProjectQuickNavGUI:
         self.folder_frame = ttk.LabelFrame(self.main_frame, text="Select Subfolder")
         self.folder_frame.grid(row=2, column=0, sticky="ew", pady=(0, 16))
 
-        # Folder options
+        # Folder options with icons
         folder_options = [
-            "4. System Designs",
-            "1. Sales Handover",
-            "2. BOM & Orders",
-            "6. Customer Handover Documents",
-            "5. Floor Plans",
-            "6. Site Photos"
+            ("📁 4. System Designs", "4. System Designs"),
+            ("📁 1. Sales Handover", "1. Sales Handover"),
+            ("📁 2. BOM & Orders", "2. BOM & Orders"),
+            ("📁 6. Customer Handover Documents", "6. Customer Handover Documents"),
+            ("📁 5. Floor Plans", "5. Floor Plans"),
+            ("📁 6. Site Photos", "6. Site Photos")
         ]
 
-        # Create radio buttons for folders
+        # Create radio buttons for folders with icons and tooltips
         self.folder_radios = []
-        for i, folder in enumerate(folder_options):
+        folder_tooltips = {
+            "4. System Designs": "Technical drawings, CAD files, and system specifications",
+            "1. Sales Handover": "Initial project information and requirements",
+            "2. BOM & Orders": "Bill of materials and purchase orders",
+            "6. Customer Handover Documents": "Final delivery documentation",
+            "5. Floor Plans": "Architectural drawings and layouts",
+            "6. Site Photos": "Project site photographs and documentation"
+        }
+
+        for i, (display_text, folder_value) in enumerate(folder_options):
             radio = ttk.Radiobutton(
                 self.folder_frame,
-                text=folder,
+                text=display_text,
                 variable=self.selected_folder,
-                value=folder
+                value=folder_value
             )
             radio.pack(anchor="w", padx=15, pady=2)
             self.folder_radios.append(radio)
+            self._add_tooltip(radio, folder_tooltips.get(folder_value, "Project subfolder"))
 
     def _create_document_mode_section(self):
         """Create document type and filter section for document mode."""
@@ -341,17 +371,18 @@ class ProjectQuickNavGUI:
             row=0, column=0, sticky="w", padx=(10, 5), pady=(10, 5)
         )
 
+        # Document type options with icons
         doc_type_options = [
-            "Low-Level Design (LLD)",
-            "High-Level Design (HLD)",
-            "Change Orders",
-            "Sales & PO Reports",
-            "Floor Plans",
-            "Scope Documents",
-            "QA/ITP Reports",
-            "SWMS",
-            "Supplier Quotes",
-            "Site Photos"
+            "🔧 Low-Level Design (LLD)",
+            "📊 High-Level Design (HLD)",
+            "📄 Change Orders",
+            "💰 Sales & PO Reports",
+            "🏗️ Floor Plans",
+            "📋 Scope Documents",
+            "✅ QA/ITP Reports",
+            "⚠️ SWMS",
+            "💰 Supplier Quotes",
+            "📷 Site Photos"
         ]
 
         self.doc_type_combo = ttk.Combobox(
@@ -362,6 +393,7 @@ class ProjectQuickNavGUI:
         )
         self.doc_type_combo.grid(row=0, column=1, sticky="ew", padx=(0, 10), pady=(10, 5))
         self.doc_type_combo.current(0)
+        self._add_tooltip(self.doc_type_combo, "Select the type of document to search for")
 
         # Version filter
         ttk.Label(self.doc_frame, text="Version Filter:").grid(
@@ -383,6 +415,7 @@ class ProjectQuickNavGUI:
             state="readonly"
         )
         self.version_combo.grid(row=1, column=1, sticky="ew", padx=(0, 10), pady=(5, 5))
+        self._add_tooltip(self.version_combo, "Filter documents by version (latest, as-built, etc.)")
 
         # Filters frame
         filters_frame = ttk.Frame(self.doc_frame)
@@ -391,22 +424,25 @@ class ProjectQuickNavGUI:
         filters_frame.columnconfigure(3, weight=1)
 
         # Room filter
-        ttk.Label(filters_frame, text="Room:").grid(row=0, column=0, sticky="w", padx=(0, 5))
+        ttk.Label(filters_frame, text="🏠 Room:").grid(row=0, column=0, sticky="w", padx=(0, 5))
         self.room_entry = ttk.Entry(filters_frame, textvariable=self.room_filter, width=8)
         self.room_entry.grid(row=0, column=1, sticky="w", padx=(0, 20))
+        self._add_tooltip(self.room_entry, "Filter by room number (e.g., 101, 201)")
 
         # CO filter
-        ttk.Label(filters_frame, text="CO:").grid(row=0, column=2, sticky="w", padx=(0, 5))
+        ttk.Label(filters_frame, text="📝 CO:").grid(row=0, column=2, sticky="w", padx=(0, 5))
         self.co_entry = ttk.Entry(filters_frame, textvariable=self.co_filter, width=8)
         self.co_entry.grid(row=0, column=3, sticky="w", padx=(0, 20))
+        self._add_tooltip(self.co_entry, "Filter by Change Order number")
 
         # Include archive checkbox
         self.archive_check = ttk.Checkbutton(
             filters_frame,
-            text="Include Archive",
+            text="📦 Include Archive",
             variable=self.include_archive
         )
         self.archive_check.grid(row=0, column=4, sticky="w")
+        self._add_tooltip(self.archive_check, "Include archived and older versions")
 
         # Initially hide document frame
         self.doc_frame.grid_remove()
@@ -424,18 +460,20 @@ class ProjectQuickNavGUI:
         # Debug mode checkbox
         self.debug_check = ttk.Checkbutton(
             opts_container,
-            text="Show Debug Output",
+            text="🔧 Show Debug Output",
             variable=self.debug_mode
         )
         self.debug_check.pack(side="left")
+        self._add_tooltip(self.debug_check, "Show detailed debug information in results")
 
         # Training data checkbox
         self.training_check = ttk.Checkbutton(
             opts_container,
-            text="Generate Training Data",
+            text="📊 Generate Training Data",
             variable=self.training_mode
         )
         self.training_check.pack(side="left", padx=(20, 0))
+        self._add_tooltip(self.training_check, "Generate JSON training data for AI analysis")
 
     def _create_ai_toolbar(self):
         """Create AI toolbar with enhanced styling."""
@@ -447,24 +485,26 @@ class ProjectQuickNavGUI:
         ai_container = ttk.Frame(ai_frame)
         ai_container.pack(fill="x", padx=16, pady=16)
 
-        # AI toggle button with primary styling
+        # AI toggle button with primary styling and icon
         self.ai_toggle_button = ttk.Button(
             ai_container,
-            text="Enable AI",
+            text="🤖 Enable AI",
             command=self.toggle_ai,
             width=14
         )
         self.ai_toggle_button.pack(side=tk.LEFT, padx=(0, 8))
+        self._add_tooltip(self.ai_toggle_button, "Enable or disable AI assistant features")
 
         # AI chat button
         self.ai_chat_button = ttk.Button(
             ai_container,
-            text="AI Chat",
+            text="💬 AI Chat",
             command=self.toggle_ai_panel,
             width=14,
             state=tk.DISABLED
         )
         self.ai_chat_button.pack(side=tk.LEFT, padx=(0, 16))
+        self._add_tooltip(self.ai_chat_button, "Open AI chat window for interactive assistance")
 
         # AI status indicator with improved styling
         self.ai_status_label = ttk.Label(
@@ -491,13 +531,22 @@ class ProjectQuickNavGUI:
         )
         self.status_label.grid(row=0, column=0, sticky="ew")
 
-        # Progress bar (hidden by default)
+        # Progress bar with loading spinner (hidden by default)
         self.progress_bar = ttk.Progressbar(
             status_frame,
             mode='indeterminate'
         )
         self.progress_bar.grid(row=1, column=0, sticky="ew", pady=(5, 0))
         self.progress_bar.grid_remove()
+
+        # Loading indicator label
+        self.loading_label = ttk.Label(
+            status_frame,
+            text="",
+            font=("Segoe UI", 9)
+        )
+        self.loading_label.grid(row=2, column=0, sticky="ew", pady=(2, 0))
+        self.loading_label.grid_remove()
 
     def _create_action_buttons(self):
         """Create action buttons with enhanced styling."""
@@ -509,56 +558,72 @@ class ProjectQuickNavGUI:
         button_container = ttk.Frame(button_frame)
         button_container.pack(expand=True)
 
-        # Folder mode button with primary styling
+        # Folder mode button with primary styling and icon
         self.open_button = ttk.Button(
             button_container,
-            text="Open Folder",
+            text="📂 Open Folder",
             command=self.execute_folder_navigation,
             width=18
         )
         self.open_button.pack(side="left", padx=(0, 12))
+        self._add_tooltip(self.open_button, "Open the selected project subfolder in file explorer")
 
-        # Document mode buttons with improved styling (initially hidden)
+        # Document mode buttons with improved styling and icons (initially hidden)
         self.find_button = ttk.Button(
             button_container,
-            text="Find Documents",
+            text="🔍 Find Documents",
             command=self.execute_document_navigation,
             width=16
         )
+        self._add_tooltip(self.find_button, "Search for the best matching document")
 
         self.choose_button = ttk.Button(
             button_container,
-            text="Choose From List",
+            text="📋 Choose From List",
             command=lambda: self.execute_document_navigation(choose_mode=True),
             width=16
         )
+        self._add_tooltip(self.choose_button, "Show all matching documents to choose from")
 
         # Open/Navigate button (appears after successful search)
         self.navigate_button = ttk.Button(
             button_container,
-            text="Open Selected",
+            text="✅ Open Selected",
             command=self._execute_final_navigation,
             width=16,
             state=tk.DISABLED
         )
+        self._add_tooltip(self.navigate_button, "Open the selected result")
 
     def _create_menu_bar(self):
-        """Create menu bar."""
+        """Create menu bar with keyboard shortcut accelerators."""
         menubar = tk.Menu(self.root)
         self.root.config(menu=menubar)
 
         # File menu
         file_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="File", menu=file_menu)
-        file_menu.add_command(label="Settings...", command=self.show_settings)
+        file_menu.add_command(label="Settings...", command=self.show_settings, accelerator="Ctrl+S")
+        file_menu.add_command(label="Clear & Reset", command=self._clear_and_reset, accelerator="Ctrl+R")
         file_menu.add_separator()
-        file_menu.add_command(label="Exit", command=self.on_closing)
+        file_menu.add_command(label="Exit", command=self.on_closing, accelerator="Escape")
 
         # View menu
         view_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="View", menu=view_menu)
-        view_menu.add_command(label="Toggle Theme", command=self.toggle_theme)
-        view_menu.add_command(label="Always on Top", command=self.toggle_always_on_top)
+        view_menu.add_command(label="Folder Mode", command=lambda: self._set_mode("folder"), accelerator="Ctrl+1")
+        view_menu.add_command(label="Document Mode", command=lambda: self._set_mode("document"), accelerator="Ctrl+2")
+        view_menu.add_separator()
+        view_menu.add_command(label="Toggle Theme", command=self.toggle_theme, accelerator="Ctrl+D")
+        view_menu.add_command(label="Always on Top", command=self.toggle_always_on_top, accelerator="Ctrl+T")
+
+        # Navigate menu
+        nav_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="Navigate", menu=nav_menu)
+        nav_menu.add_command(label="Focus Search", command=lambda: self.project_entry.focus_set(), accelerator="Ctrl+F")
+        nav_menu.add_command(label="Execute", command=self._execute_current_action, accelerator="Enter")
+        nav_menu.add_separator()
+        nav_menu.add_command(label="Recent Projects", state="disabled")  # Separator label
 
         # AI menu
         ai_menu = tk.Menu(menubar, tearoff=0)
@@ -566,12 +631,14 @@ class ProjectQuickNavGUI:
         ai_menu.add_checkbutton(
             label="Enable AI Assistant",
             variable=self.ai_enabled,
-            command=self.toggle_ai
+            command=self.toggle_ai,
+            accelerator="Ctrl+/"
         )
         ai_menu.add_checkbutton(
             label="Show AI Chat Panel",
             variable=self.ai_panel_visible,
-            command=self.toggle_ai_panel
+            command=self.toggle_ai_panel,
+            accelerator="Ctrl+Space"
         )
         ai_menu.add_separator()
         ai_menu.add_command(label="AI Settings...", command=self.show_ai_settings)
@@ -579,22 +646,41 @@ class ProjectQuickNavGUI:
         # Help menu
         help_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="Help", menu=help_menu)
+        help_menu.add_command(label="User Guide", command=self.show_help, accelerator="F1")
+        help_menu.add_command(label="Keyboard Shortcuts", command=self._show_keyboard_shortcuts)
+        help_menu.add_separator()
         help_menu.add_command(label="Dependency Status...", command=self.show_dependency_status)
         help_menu.add_separator()
         help_menu.add_command(label="About", command=self.show_about)
-        help_menu.add_command(label="User Guide", command=self.show_help)
 
     def _setup_events(self):
-        """Set up event bindings."""
+        """Set up event bindings with comprehensive keyboard shortcuts."""
         # Window events
         self.root.bind('<Configure>', self._on_window_configure)
         self.root.bind('<KeyPress>', self._on_key_press)
 
         # Global shortcuts
         self.root.bind('<Control-Return>', lambda e: self._execute_current_action())
+        self.root.bind('<Return>', lambda e: self._execute_current_action())  # Enter to execute
         self.root.bind('<Escape>', lambda e: self.hide_window())
         self.root.bind('<F1>', lambda e: self.show_help())
         self.root.bind('<Control-comma>', lambda e: self.show_settings())
+
+        # Quick navigation shortcuts
+        self.root.bind('<Control-f>', lambda e: self.project_entry.focus_set())  # Focus search
+        self.root.bind('<Control-1>', lambda e: self._set_mode("folder"))  # Folder mode
+        self.root.bind('<Control-2>', lambda e: self._set_mode("document"))  # Document mode
+        self.root.bind('<Control-d>', lambda e: self.toggle_theme())  # Toggle dark mode
+        self.root.bind('<Control-t>', lambda e: self.toggle_always_on_top())  # Toggle on top
+        self.root.bind('<Control-r>', lambda e: self._clear_and_reset())  # Reset/clear
+
+        # AI shortcuts
+        self.root.bind('<Control-space>', lambda e: self.toggle_ai_panel())  # Toggle AI chat
+        self.root.bind('<Control-slash>', lambda e: self.toggle_ai())  # Toggle AI
+
+        # Settings shortcuts
+        self.root.bind('<Control-s>', lambda e: self.show_settings())  # Settings
+        self.root.bind('<Control-h>', lambda e: self.show_help())  # Help
 
         # Focus events
         self.root.bind('<FocusIn>', self._on_focus_in)
@@ -1060,10 +1146,42 @@ class ProjectQuickNavGUI:
             logger.error(f"Unexpected error opening file {path}: {e}")
             self._show_error(f"Failed to open file: {e}")
 
-    def _show_error(self, message: str):
-        """Show error message."""
-        messagebox.showerror("Error", message)
+    def _show_error(self, message: str, suggestion: Optional[str] = None):
+        """Show enhanced error message with actionable guidance."""
+        # Extract error type and provide helpful suggestions
+        if not suggestion:
+            if "not found" in message.lower() or "no such file" in message.lower():
+                suggestion = "💡 Try these solutions:\n" \
+                           "• Check the project number is correct (5 digits)\n" \
+                           "• Verify the project exists in OneDrive\n" \
+                           "• Try searching by project name instead"
+            elif "permission" in message.lower() or "access denied" in message.lower():
+                suggestion = "💡 Try these solutions:\n" \
+                           "• Check you have access to the OneDrive folder\n" \
+                           "• Verify OneDrive sync is working\n" \
+                           "• Contact IT if access issues persist"
+            elif "network" in message.lower() or "connection" in message.lower():
+                suggestion = "💡 Try these solutions:\n" \
+                           "• Check your internet connection\n" \
+                           "• Verify OneDrive is synced\n" \
+                           "• Try again in a few moments"
+            elif "invalid" in message.lower():
+                suggestion = "💡 Try these solutions:\n" \
+                           "• Enter a 5-digit project number (e.g., 17741)\n" \
+                           "• Or search by project name\n" \
+                           "• Use Ctrl+R to clear and start over"
+            else:
+                suggestion = "💡 Tip: Press Ctrl+R to clear and try again\n" \
+                           "Or press F1 for help"
+
+        # Combine message and suggestion
+        full_message = f"❌ {message}\n\n{suggestion}"
+
+        messagebox.showerror("Error", full_message)
         logger.error(f"Error shown to user: {message}")
+
+        # Update status with brief error
+        self.status_text.set(f"⚠️ Error: {message[:50]}...")
 
     def _execute_final_navigation(self):
         """Execute final navigation using stored search result."""
@@ -1390,16 +1508,16 @@ class ProjectQuickNavGUI:
             self.status_text.set("AI Assistant disabled")
 
     def _update_ai_ui(self):
-        """Update AI-related UI elements with enhanced styling."""
+        """Update AI-related UI elements with enhanced styling and status icons."""
         if hasattr(self, 'ai_toggle_button'):
             if self.ai_enabled.get():
-                self.ai_toggle_button.config(text="Disable AI")
+                self.ai_toggle_button.config(text="🤖 Disable AI")
                 self.ai_chat_button.config(state=tk.NORMAL)
-                self.ai_status_label.config(text="Status: Enabled")
+                self.ai_status_label.config(text="✅ Status: Enabled")
             else:
-                self.ai_toggle_button.config(text="Enable AI")
+                self.ai_toggle_button.config(text="🤖 Enable AI")
                 self.ai_chat_button.config(state=tk.DISABLED)
-                self.ai_status_label.config(text="Status: Disabled")
+                self.ai_status_label.config(text="❌ Status: Disabled")
 
     def toggle_ai_panel(self):
         """Toggle AI chat panel visibility."""
@@ -1654,6 +1772,696 @@ For more help, visit the project documentation."""
         message += f"{'✓' if status['hotkey_manager_ready'] else '✗'} Global Hotkeys: {'Available' if status['hotkey_manager_ready'] else 'Not Available'}\n"
 
         messagebox.showinfo("Dependency Status", message)
+
+    # Keyboard Navigation Methods
+    def _setup_keyboard_navigation(self):
+        """Set up comprehensive keyboard navigation system."""
+        # Define tab order for logical navigation
+        self._tab_order = [
+            'project_entry',
+            'folder_radio',
+            'doc_radio',
+            'folder_group',
+            'doc_type_combo',
+            'version_combo',
+            'room_entry',
+            'co_entry',
+            'archive_check',
+            'debug_check',
+            'training_check',
+            'ai_toggle_button',
+            'ai_chat_button',
+            'action_buttons'
+        ]
+
+        # Define focus groups for arrow key navigation
+        self._focus_groups = {
+            'mode_selection': ['folder_radio', 'doc_radio'],
+            'folder_selection': ['folder_radios'],
+            'document_filters': ['doc_type_combo', 'version_combo', 'room_entry', 'co_entry', 'archive_check'],
+            'options': ['debug_check', 'training_check'],
+            'ai_controls': ['ai_toggle_button', 'ai_chat_button'],
+            'action_buttons': ['open_button', 'find_button', 'choose_button', 'navigate_button']
+        }
+
+        # Apply focus styling to all focusable widgets
+        self._apply_focus_styling()
+
+        # Initialize keyboard navigation state
+        self._keyboard_navigation_enabled = True
+        self._current_focus_index = 0
+
+    def _apply_focus_styling(self):
+        """Apply focus indicators to all focusable widgets."""
+        # Focus styling is handled by the theme system
+        # This method can be used for additional custom focus indicators
+        pass
+
+    def _on_tab_navigation(self, event):
+        """Handle Tab key navigation."""
+        if not self._keyboard_navigation_enabled:
+            return
+
+        try:
+            # Get current mode to determine available widgets
+            current_mode = self.current_mode.get()
+            available_widgets = self._get_available_widgets(current_mode)
+
+            if not available_widgets:
+                return
+
+            # Find current focus index
+            current_widget = self.root.focus_get()
+            current_index = self._find_widget_index(current_widget, available_widgets)
+
+            # Move to next widget
+            next_index = (current_index + 1) % len(available_widgets)
+            next_widget = available_widgets[next_index]
+
+            if next_widget:
+                next_widget.focus_set()
+                # Scroll widget into view if needed
+                self._scroll_widget_into_view(next_widget)
+
+            return "break"  # Prevent default tab behavior
+
+        except Exception as e:
+            logger.debug(f"Tab navigation error: {e}")
+
+    def _on_shift_tab_navigation(self, event):
+        """Handle Shift+Tab key navigation (reverse)."""
+        if not self._keyboard_navigation_enabled:
+            return
+
+        try:
+            # Get current mode to determine available widgets
+            current_mode = self.current_mode.get()
+            available_widgets = self._get_available_widgets(current_mode)
+
+            if not available_widgets:
+                return
+
+            # Find current focus index
+            current_widget = self.root.focus_get()
+            current_index = self._find_widget_index(current_widget, available_widgets)
+
+            # Move to previous widget
+            prev_index = (current_index - 1) % len(available_widgets)
+            prev_widget = available_widgets[prev_index]
+
+            if prev_widget:
+                prev_widget.focus_set()
+                # Scroll widget into view if needed
+                self._scroll_widget_into_view(prev_widget)
+
+            return "break"  # Prevent default tab behavior
+
+        except Exception as e:
+            logger.debug(f"Shift+Tab navigation error: {e}")
+
+    def _on_arrow_navigation(self, event):
+        """Handle arrow key navigation within option groups."""
+        if not self._keyboard_navigation_enabled:
+            return
+
+        try:
+            current_widget = self.root.focus_get()
+            if not current_widget:
+                return
+
+            # Determine which group the current widget belongs to
+            group_name = self._find_widget_group(current_widget)
+            if not group_name:
+                return
+
+            group_widgets = self._get_group_widgets(group_name)
+            if len(group_widgets) <= 1:
+                return
+
+            current_index = group_widgets.index(current_widget) if current_widget in group_widgets else 0
+
+            # Navigate based on arrow key
+            if event.keysym in ['Up', 'Left']:
+                next_index = (current_index - 1) % len(group_widgets)
+            elif event.keysym in ['Down', 'Right']:
+                next_index = (current_index + 1) % len(group_widgets)
+            else:
+                return
+
+            next_widget = group_widgets[next_index]
+            if next_widget:
+                next_widget.focus_set()
+                # For radio buttons, also select them
+                if isinstance(next_widget, ttk.Radiobutton):
+                    next_widget.invoke()
+
+            return "break"  # Prevent default arrow behavior
+
+        except Exception as e:
+            logger.debug(f"Arrow navigation error: {e}")
+
+    def _get_available_widgets(self, mode: str) -> List:
+        """Get list of currently available/visible widgets for navigation."""
+        widgets = []
+
+        # Always available
+        if hasattr(self, 'project_entry'):
+            widgets.append(self.project_entry)
+
+        # Mode selection
+        if hasattr(self, 'folder_radio'):
+            widgets.append(self.folder_radio)
+        if hasattr(self, 'doc_radio'):
+            widgets.append(self.doc_radio)
+
+        # Mode-specific widgets
+        if mode == "folder":
+            # Add folder radio buttons
+            if hasattr(self, 'folder_radios'):
+                widgets.extend(self.folder_radios)
+        else:  # document mode
+            # Add document controls
+            if hasattr(self, 'doc_type_combo'):
+                widgets.append(self.doc_type_combo)
+            if hasattr(self, 'version_combo'):
+                widgets.append(self.version_combo)
+            if hasattr(self, 'room_entry'):
+                widgets.append(self.room_entry)
+            if hasattr(self, 'co_entry'):
+                widgets.append(self.co_entry)
+            if hasattr(self, 'archive_check'):
+                widgets.append(self.archive_check)
+
+        # Options section
+        if hasattr(self, 'debug_check'):
+            widgets.append(self.debug_check)
+        if hasattr(self, 'training_check'):
+            widgets.append(self.training_check)
+
+        # AI controls (if enabled)
+        if hasattr(self, 'ai_toggle_button'):
+            widgets.append(self.ai_toggle_button)
+        if hasattr(self, 'ai_chat_button') and self.ai_enabled.get():
+            widgets.append(self.ai_chat_button)
+
+        # Action buttons based on mode
+        if mode == "folder":
+            if hasattr(self, 'open_button'):
+                widgets.append(self.open_button)
+        else:
+            if hasattr(self, 'find_button'):
+                widgets.append(self.find_button)
+            if hasattr(self, 'choose_button'):
+                widgets.append(self.choose_button)
+            if hasattr(self, 'navigate_button') and self.last_search_result:
+                widgets.append(self.navigate_button)
+
+        return [w for w in widgets if w and w.winfo_exists()]
+
+    def _find_widget_index(self, widget, widget_list: List) -> int:
+        """Find the index of a widget in the widget list."""
+        try:
+            return widget_list.index(widget)
+        except (ValueError, AttributeError):
+            return 0
+
+    def _find_widget_group(self, widget) -> Optional[str]:
+        """Find which focus group a widget belongs to."""
+        if hasattr(self, 'folder_radios') and widget in self.folder_radios:
+            return 'folder_selection'
+        elif widget in [getattr(self, 'folder_radio', None), getattr(self, 'doc_radio', None)]:
+            return 'mode_selection'
+        elif widget in [getattr(self, 'doc_type_combo', None), getattr(self, 'version_combo', None),
+                       getattr(self, 'room_entry', None), getattr(self, 'co_entry', None),
+                       getattr(self, 'archive_check', None)]:
+            return 'document_filters'
+        elif widget in [getattr(self, 'debug_check', None), getattr(self, 'training_check', None)]:
+            return 'options'
+        elif widget in [getattr(self, 'ai_toggle_button', None), getattr(self, 'ai_chat_button', None)]:
+            return 'ai_controls'
+        elif widget in [getattr(self, 'open_button', None), getattr(self, 'find_button', None),
+                       getattr(self, 'choose_button', None), getattr(self, 'navigate_button', None)]:
+            return 'action_buttons'
+        return None
+
+    def _get_group_widgets(self, group_name: str) -> List:
+        """Get all widgets in a specific focus group."""
+        widgets = []
+
+        if group_name == 'mode_selection':
+            widgets = [getattr(self, 'folder_radio', None), getattr(self, 'doc_radio', None)]
+        elif group_name == 'folder_selection' and hasattr(self, 'folder_radios'):
+            widgets = self.folder_radios
+        elif group_name == 'document_filters':
+            widgets = [getattr(self, 'doc_type_combo', None), getattr(self, 'version_combo', None),
+                      getattr(self, 'room_entry', None), getattr(self, 'co_entry', None),
+                      getattr(self, 'archive_check', None)]
+        elif group_name == 'options':
+            widgets = [getattr(self, 'debug_check', None), getattr(self, 'training_check', None)]
+        elif group_name == 'ai_controls':
+            widgets = [getattr(self, 'ai_toggle_button', None), getattr(self, 'ai_chat_button', None)]
+        elif group_name == 'action_buttons':
+            current_mode = self.current_mode.get()
+            if current_mode == "folder":
+                widgets = [getattr(self, 'open_button', None)]
+            else:
+                widgets = [getattr(self, 'find_button', None), getattr(self, 'choose_button', None)]
+                if self.last_search_result:
+                    widgets.append(getattr(self, 'navigate_button', None))
+
+        return [w for w in widgets if w and w.winfo_exists()]
+
+    def _scroll_widget_into_view(self, widget):
+        """Scroll widget into view if it's outside the visible area."""
+        try:
+            # Update widget position
+            widget.update_idletasks()
+
+            # Get widget position relative to root
+            widget_y = widget.winfo_rooty() - self.root.winfo_rooty()
+            window_height = self.root.winfo_height()
+
+            # If widget is outside visible area, it would need scrolling
+            # For now, just ensure it's visible (basic implementation)
+            if widget_y < 0 or widget_y > window_height:
+                widget.tkraise()
+
+        except Exception as e:
+            logger.debug(f"Scroll into view error: {e}")
+
+    def _focus_search(self):
+        """Focus the search input field (Ctrl+F)."""
+        if hasattr(self, 'project_entry'):
+            self.project_entry.focus_set()
+            self.project_entry.select_range(0, tk.END)
+
+    def _switch_to_folder_mode(self):
+        """Switch to folder navigation mode (Ctrl+1)."""
+        self.current_mode.set("folder")
+        self._on_mode_change()
+        if hasattr(self, 'folder_radio'):
+            self.folder_radio.focus_set()
+
+    def _switch_to_document_mode(self):
+        """Switch to document navigation mode (Ctrl+2)."""
+        self.current_mode.set("document")
+        self._on_mode_change()
+        if hasattr(self, 'doc_radio'):
+            self.doc_radio.focus_set()
+
+    def _toggle_debug_mode(self):
+        """Toggle debug mode (Ctrl+D)."""
+        current_value = self.debug_mode.get()
+        self.debug_mode.set(not current_value)
+        if hasattr(self, 'debug_check'):
+            self.debug_check.focus_set()
+
+    def set_keyboard_navigation_enabled(self, enabled: bool):
+        """Enable or disable keyboard navigation."""
+        self._keyboard_navigation_enabled = enabled
+        logger.info(f"Keyboard navigation {'enabled' if enabled else 'disabled'}")
+
+    def get_keyboard_navigation_enabled(self) -> bool:
+        """Check if keyboard navigation is enabled."""
+        return getattr(self, '_keyboard_navigation_enabled', True)
+
+    # Keyboard Shortcut Helper Methods
+    def _set_mode(self, mode: str):
+        """Set navigation mode via keyboard shortcut."""
+        if mode in ["folder", "document"]:
+            self.current_mode.set(mode)
+            self._on_mode_change()
+            self.status_text.set(f"Switched to {mode} mode")
+
+    def _clear_and_reset(self):
+        """Clear all inputs and reset to default state."""
+        self.project_input.set("")
+        self.selected_folder.set("4. System Designs")
+        self.doc_type.set("CAD")
+        self.version.set("Any")
+        self.room_filter.set("")
+        self.co_filter.set("")
+        self.include_archive.set(False)
+        self.debug_mode.set(False)
+        self.training_mode.set(False)
+        self.status_text.set("✓ Cleared all inputs")
+        self.project_entry.focus_set()
+
+        # Clear any stored results
+        if hasattr(self, 'last_search_result'):
+            self.last_search_result = None
+        if hasattr(self, 'last_search_type'):
+            self.last_search_type = None
+
+        # Reset navigate button state
+        if hasattr(self, 'navigate_button'):
+            self.navigate_button.config(state=tk.DISABLED)
+
+    # Recent Projects System
+    def _update_recent_projects(self):
+        """Update the recent projects quick access buttons."""
+        # Clear existing buttons
+        for widget in self.recent_buttons_frame.winfo_children():
+            widget.destroy()
+
+        # Get recent projects
+        recent_projects = self.settings.get_recent_projects()[:5]  # Limit to 5
+
+        if not recent_projects:
+            # Show placeholder if no recent projects
+            ttk.Label(
+                self.recent_buttons_frame,
+                text="No recent projects",
+                font=("Segoe UI", 9),
+                foreground="gray"
+            ).pack(side="left")
+            return
+
+        # Create button for each recent project
+        for project in recent_projects:
+            project_num = project.get('project_number', 'Unknown')
+            project_name = project.get('project_name', '')
+
+            # Format button text
+            button_text = str(project_num)
+            if len(button_text) > 8:
+                button_text = button_text[:8] + "..."
+
+            # Create button
+            btn = ttk.Button(
+                self.recent_buttons_frame,
+                text=button_text,
+                command=lambda p=project_num: self._select_recent_project(p),
+                width=8
+            )
+            btn.pack(side="left", padx=(0, 4))
+
+            # Add tooltip with full project info
+            tooltip_text = f"{project_num}"
+            if project_name:
+                tooltip_text += f"\n{project_name}"
+            self._add_tooltip(btn, tooltip_text)
+
+    def _select_recent_project(self, project_number):
+        """Select a project from recent projects list."""
+        self.project_input.set(str(project_number))
+        self.project_entry.focus_set()
+        self.status_text.set(f"✓ Selected recent project: {project_number}")
+
+    # Autocomplete System
+    def _setup_autocomplete(self):
+        """Set up autocomplete functionality for project search."""
+        # Initialize autocomplete state
+        self.autocomplete_window = None
+        self.autocomplete_listbox = None
+        self.autocomplete_suggestions = []
+        self.autocomplete_index = -1
+
+        # Bind autocomplete events to project entry
+        self.project_entry.bind('<KeyRelease>', self._on_autocomplete_keyrelease)
+        self.project_entry.bind('<Down>', self._on_autocomplete_down)
+        self.project_entry.bind('<Up>', self._on_autocomplete_up)
+        self.project_entry.bind('<Tab>', self._on_autocomplete_tab)
+
+    def _on_autocomplete_keyrelease(self, event):
+        """Handle key release for autocomplete suggestions."""
+        # Ignore special keys
+        if event.keysym in ('Up', 'Down', 'Left', 'Right', 'Return', 'Tab', 'Escape', 'Shift_L', 'Shift_R', 'Control_L', 'Control_R'):
+            return
+
+        text = self.project_input.get()
+
+        # Hide autocomplete if text too short
+        if len(text) < 2:
+            self._hide_autocomplete()
+            return
+
+        # Get suggestions from recent projects
+        suggestions = self._get_autocomplete_suggestions(text)
+
+        if suggestions:
+            self._show_autocomplete(suggestions)
+        else:
+            self._hide_autocomplete()
+
+    def _get_autocomplete_suggestions(self, text: str) -> List[str]:
+        """Get autocomplete suggestions based on input text."""
+        suggestions = []
+
+        # Get recent projects from settings
+        recent_projects = self.settings.get_recent_projects()
+
+        # Filter by matching text (case-insensitive)
+        text_lower = text.lower()
+        for project in recent_projects:
+            project_str = str(project)
+            if text_lower in project_str.lower():
+                suggestions.append(project_str)
+
+        # Limit to top 5 suggestions
+        return suggestions[:5]
+
+    def _show_autocomplete(self, suggestions: List[str]):
+        """Show autocomplete dropdown with suggestions."""
+        self.autocomplete_suggestions = suggestions
+
+        # Create autocomplete window if not exists
+        if self.autocomplete_window is None:
+            self.autocomplete_window = tk.Toplevel(self.root)
+            self.autocomplete_window.wm_overrideredirect(True)
+
+            # Create listbox
+            self.autocomplete_listbox = tk.Listbox(
+                self.autocomplete_window,
+                height=min(5, len(suggestions)),
+                font=("Segoe UI", 9)
+            )
+            self.autocomplete_listbox.pack(fill=tk.BOTH, expand=True)
+
+            # Bind selection
+            self.autocomplete_listbox.bind('<<ListboxSelect>>', self._on_autocomplete_select)
+            self.autocomplete_listbox.bind('<Return>', self._on_autocomplete_select)
+            self.autocomplete_listbox.bind('<Double-Button-1>', self._on_autocomplete_select)
+
+        # Update listbox content
+        self.autocomplete_listbox.delete(0, tk.END)
+        for suggestion in suggestions:
+            self.autocomplete_listbox.insert(tk.END, suggestion)
+
+        # Position window below entry
+        x = self.project_entry.winfo_rootx()
+        y = self.project_entry.winfo_rooty() + self.project_entry.winfo_height()
+        width = self.project_entry.winfo_width()
+
+        self.autocomplete_window.geometry(f"{width}x{min(100, len(suggestions) * 20)}+{x}+{y}")
+        self.autocomplete_window.lift()
+
+    def _hide_autocomplete(self):
+        """Hide autocomplete dropdown."""
+        if self.autocomplete_window:
+            self.autocomplete_window.destroy()
+            self.autocomplete_window = None
+            self.autocomplete_listbox = None
+        self.autocomplete_index = -1
+
+    def _on_autocomplete_down(self, event):
+        """Handle down arrow in autocomplete."""
+        if self.autocomplete_listbox and self.autocomplete_suggestions:
+            self.autocomplete_index = (self.autocomplete_index + 1) % len(self.autocomplete_suggestions)
+            self.autocomplete_listbox.selection_clear(0, tk.END)
+            self.autocomplete_listbox.selection_set(self.autocomplete_index)
+            self.autocomplete_listbox.see(self.autocomplete_index)
+            return "break"
+
+    def _on_autocomplete_up(self, event):
+        """Handle up arrow in autocomplete."""
+        if self.autocomplete_listbox and self.autocomplete_suggestions:
+            self.autocomplete_index = (self.autocomplete_index - 1) % len(self.autocomplete_suggestions)
+            self.autocomplete_listbox.selection_clear(0, tk.END)
+            self.autocomplete_listbox.selection_set(self.autocomplete_index)
+            self.autocomplete_listbox.see(self.autocomplete_index)
+            return "break"
+
+    def _on_autocomplete_tab(self, event):
+        """Handle tab key in autocomplete."""
+        if self.autocomplete_listbox and self.autocomplete_suggestions:
+            if self.autocomplete_index >= 0:
+                selected = self.autocomplete_suggestions[self.autocomplete_index]
+            elif self.autocomplete_listbox.curselection():
+                idx = self.autocomplete_listbox.curselection()[0]
+                selected = self.autocomplete_suggestions[idx]
+            else:
+                selected = self.autocomplete_suggestions[0]
+
+            self.project_input.set(selected)
+            self._hide_autocomplete()
+            return "break"
+
+    def _on_autocomplete_select(self, event):
+        """Handle autocomplete selection."""
+        if self.autocomplete_listbox and self.autocomplete_listbox.curselection():
+            idx = self.autocomplete_listbox.curselection()[0]
+            selected = self.autocomplete_suggestions[idx]
+            self.project_input.set(selected)
+            self._hide_autocomplete()
+            self.project_entry.focus_set()
+
+    # Keyboard Shortcuts Help
+    def _show_keyboard_shortcuts(self):
+        """Show comprehensive keyboard shortcuts reference dialog."""
+        shortcuts_window = tk.Toplevel(self.root)
+        shortcuts_window.title("Keyboard Shortcuts")
+        shortcuts_window.geometry("600x500")
+        shortcuts_window.transient(self.root)
+
+        # Apply theme
+        self.theme.apply_theme(shortcuts_window)
+
+        # Create scrollable frame
+        canvas = tk.Canvas(shortcuts_window)
+        scrollbar = ttk.Scrollbar(shortcuts_window, orient="vertical", command=canvas.yview)
+        scrollable_frame = ttk.Frame(canvas)
+
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        # Title
+        title_label = ttk.Label(
+            scrollable_frame,
+            text="⌨️ Keyboard Shortcuts Reference",
+            font=("Segoe UI", 14, "bold")
+        )
+        title_label.pack(pady=(10, 20))
+
+        # Shortcuts categories
+        shortcuts = {
+            "🔍 Navigation": [
+                ("Ctrl+F", "Focus search box"),
+                ("Enter", "Execute current action"),
+                ("Escape", "Hide window"),
+                ("Ctrl+1", "Switch to folder mode"),
+                ("Ctrl+2", "Switch to document mode"),
+            ],
+            "✏️ Editing": [
+                ("Ctrl+R", "Clear and reset all inputs"),
+                ("Tab", "Autocomplete selection"),
+                ("Up/Down", "Navigate autocomplete suggestions"),
+            ],
+            "🎨 View": [
+                ("Ctrl+D", "Toggle dark/light theme"),
+                ("Ctrl+T", "Toggle always on top"),
+            ],
+            "🤖 AI": [
+                ("Ctrl+Space", "Toggle AI chat panel"),
+                ("Ctrl+/", "Enable/disable AI assistant"),
+            ],
+            "⚙️ Settings & Help": [
+                ("Ctrl+S", "Open settings"),
+                ("Ctrl+H", "Show help"),
+                ("F1", "Show user guide"),
+            ],
+        }
+
+        # Create sections for each category
+        for category, items in shortcuts.items():
+            # Category header
+            category_frame = ttk.LabelFrame(scrollable_frame, text=category)
+            category_frame.pack(fill="x", padx=20, pady=(0, 15))
+
+            # Shortcuts list
+            for key, description in items:
+                shortcut_frame = ttk.Frame(category_frame)
+                shortcut_frame.pack(fill="x", padx=10, pady=5)
+
+                key_label = ttk.Label(
+                    shortcut_frame,
+                    text=key,
+                    font=("Consolas", 10, "bold"),
+                    width=15
+                )
+                key_label.pack(side="left")
+
+                desc_label = ttk.Label(
+                    shortcut_frame,
+                    text=description,
+                    font=("Segoe UI", 9)
+                )
+                desc_label.pack(side="left", fill="x", expand=True)
+
+        # Tips section
+        tips_frame = ttk.LabelFrame(scrollable_frame, text="💡 Pro Tips")
+        tips_frame.pack(fill="x", padx=20, pady=(0, 15))
+
+        tips = [
+            "Start typing in search box to see autocomplete suggestions",
+            "Click recent project buttons for quick access",
+            "Hover over controls to see helpful tooltips",
+            "Use Ctrl+R to quickly start a new search",
+            "Press Enter from any input field to execute",
+        ]
+
+        for tip in tips:
+            tip_label = ttk.Label(
+                tips_frame,
+                text=f"• {tip}",
+                font=("Segoe UI", 9),
+                wraplength=550,
+                justify="left"
+            )
+            tip_label.pack(anchor="w", padx=10, pady=3)
+
+        # Close button
+        close_button = ttk.Button(
+            scrollable_frame,
+            text="Close",
+            command=shortcuts_window.destroy,
+            width=15
+        )
+        close_button.pack(pady=20)
+
+        # Pack canvas and scrollbar
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+
+        # Center window
+        shortcuts_window.update_idletasks()
+        x = (shortcuts_window.winfo_screenwidth() // 2) - (600 // 2)
+        y = (shortcuts_window.winfo_screenheight() // 2) - (500 // 2)
+        shortcuts_window.geometry(f"600x500+{x}+{y}")
+
+    # Tooltip System
+    def _add_tooltip(self, widget, text):
+        """Add a tooltip to a widget."""
+        if not hasattr(self, 'tooltips'):
+            self.tooltips = {}
+
+        def show_tooltip(event):
+            tooltip = tk.Toplevel()
+            tooltip.wm_overrideredirect(True)
+            tooltip.wm_geometry(f"+{event.x_root + 10}+{event.y_root + 10}")
+
+            label = tk.Label(tooltip, text=text,
+                           background="lightyellow",
+                           foreground="black",
+                           relief="solid",
+                           borderwidth=1,
+                           font=("Segoe UI", 9))
+            label.pack()
+
+            self.tooltips[widget] = tooltip
+
+        def hide_tooltip(event):
+            if widget in self.tooltips:
+                self.tooltips[widget].destroy()
+                del self.tooltips[widget]
+
+        widget.bind("<Enter>", show_tooltip)
+        widget.bind("<Leave>", hide_tooltip)
 
 
 def main():

@@ -78,6 +78,14 @@ class SettingsManager:
                 "training_data_enabled": False,
                 "auto_backup_settings": True
             },
+            "projects": {
+                "recent_projects": [],
+                "favorites": [],
+                "project_categories": {},
+                "quick_combinations": [],
+                "max_recent_projects": 10,
+                "max_favorites": 50
+            },
             "ai": {
                 "enabled": True,
                 "default_model": "gpt-3.5-turbo",
@@ -262,6 +270,31 @@ class SettingsManager:
         """Get default navigation mode."""
         return self.get("navigation.default_mode", "folder")
 
+    # Project management getters
+    def get_recent_projects(self) -> List[Dict[str, Any]]:
+        """Get recent projects list."""
+        return self.get("projects.recent_projects", [])
+
+    def get_favorites(self) -> List[Dict[str, Any]]:
+        """Get favorite projects list."""
+        return self.get("projects.favorites", [])
+
+    def get_project_categories(self) -> Dict[str, List[str]]:
+        """Get project categories mapping."""
+        return self.get("projects.project_categories", {})
+
+    def get_quick_combinations(self) -> List[Dict[str, str]]:
+        """Get quick access combinations."""
+        return self.get("projects.quick_combinations", [])
+
+    def get_max_recent_projects(self) -> int:
+        """Get maximum number of recent projects to track."""
+        return self.get("projects.max_recent_projects", 10)
+
+    def get_max_favorites(self) -> int:
+        """Get maximum number of favorites to track."""
+        return self.get("projects.max_favorites", 50)
+
     # Setter methods
     def set(self, key: str, value: Any):
         """Set a setting value using dot notation."""
@@ -292,6 +325,154 @@ class SettingsManager:
         """Set window geometry."""
         if self._is_valid_geometry(geometry):
             self.set("ui.window_geometry", geometry)
+
+    # Project management setters
+    def add_recent_project(self, project_info: Dict[str, Any]):
+        """Add a project to recent projects list."""
+        recent = self.get_recent_projects()
+        max_recent = self.get_max_recent_projects()
+
+        # Remove if already exists
+        project_path = project_info.get('path', '')
+        recent = [p for p in recent if p.get('path') != project_path]
+
+        # Add to front
+        recent.insert(0, {
+            'path': project_path,
+            'project_number': project_info.get('project_number', ''),
+            'project_name': project_info.get('project_name', ''),
+            'last_accessed': datetime.now().isoformat(),
+            'access_count': project_info.get('access_count', 1),
+            'folder': project_info.get('folder', '')
+        })
+
+        # Limit size
+        recent = recent[:max_recent]
+        self.set("projects.recent_projects", recent)
+
+    def add_favorite_project(self, project_info: Dict[str, Any]) -> bool:
+        """Add a project to favorites."""
+        favorites = self.get_favorites()
+        max_favorites = self.get_max_favorites()
+
+        # Check if already exists
+        project_path = project_info.get('path', '')
+        if any(p.get('path') == project_path for p in favorites):
+            return False
+
+        # Check limit
+        if len(favorites) >= max_favorites:
+            return False
+
+        favorites.append({
+            'path': project_path,
+            'project_number': project_info.get('project_number', ''),
+            'project_name': project_info.get('project_name', ''),
+            'added_date': datetime.now().isoformat(),
+            'category': project_info.get('category', 'General'),
+            'notes': project_info.get('notes', ''),
+            'folder': project_info.get('folder', '')
+        })
+
+        self.set("projects.favorites", favorites)
+        return True
+
+    def remove_favorite_project(self, project_path: str) -> bool:
+        """Remove a project from favorites."""
+        favorites = self.get_favorites()
+        original_count = len(favorites)
+        favorites = [p for p in favorites if p.get('path') != project_path]
+
+        if len(favorites) < original_count:
+            self.set("projects.favorites", favorites)
+            return True
+        return False
+
+    def is_favorite_project(self, project_path: str) -> bool:
+        """Check if a project is in favorites."""
+        favorites = self.get_favorites()
+        return any(p.get('path') == project_path for p in favorites)
+
+    def add_project_category(self, category: str, projects: List[str]):
+        """Add or update a project category."""
+        categories = self.get_project_categories()
+        categories[category] = projects
+        self.set("projects.project_categories", categories)
+
+    def remove_project_category(self, category: str):
+        """Remove a project category."""
+        categories = self.get_project_categories()
+        if category in categories:
+            del categories[category]
+            self.set("projects.project_categories", categories)
+
+    def add_quick_combination(self, combination: Dict[str, str]):
+        """Add a quick access combination."""
+        combinations = self.get_quick_combinations()
+        combinations.append({
+            'name': combination.get('name', ''),
+            'project': combination.get('project', ''),
+            'folder': combination.get('folder', ''),
+            'created_date': datetime.now().isoformat()
+        })
+        self.set("projects.quick_combinations", combinations)
+
+    def remove_quick_combination(self, name: str):
+        """Remove a quick access combination."""
+        combinations = self.get_quick_combinations()
+        combinations = [c for c in combinations if c.get('name') != name]
+        self.set("projects.quick_combinations", combinations)
+
+    def update_project_access(self, project_path: str):
+        """Update access count and last accessed time for a project."""
+        recent = self.get_recent_projects()
+        for project in recent:
+            if project.get('path') == project_path:
+                project['last_accessed'] = datetime.now().isoformat()
+                project['access_count'] = project.get('access_count', 0) + 1
+                break
+        self.set("projects.recent_projects", recent)
+
+    def search_projects(self, query: str) -> List[Dict[str, Any]]:
+        """Search through recent projects and favorites."""
+        results = []
+        query_lower = query.lower()
+
+        # Search recent projects
+        for project in self.get_recent_projects():
+            if (query_lower in project.get('project_name', '').lower() or
+                query_lower in project.get('project_number', '').lower()):
+                results.append({
+                    **project,
+                    'source': 'recent'
+                })
+
+        # Search favorites
+        for project in self.get_favorites():
+            if (query_lower in project.get('project_name', '').lower() or
+                query_lower in project.get('project_number', '').lower()):
+                # Avoid duplicates
+                if not any(r.get('path') == project.get('path') for r in results):
+                    results.append({
+                        **project,
+                        'source': 'favorite'
+                    })
+
+        return results
+
+    def get_project_by_path(self, project_path: str) -> Optional[Dict[str, Any]]:
+        """Get project info by path from recent or favorites."""
+        # Check recent projects first
+        for project in self.get_recent_projects():
+            if project.get('path') == project_path:
+                return {**project, 'source': 'recent'}
+
+        # Check favorites
+        for project in self.get_favorites():
+            if project.get('path') == project_path:
+                return {**project, 'source': 'favorite'}
+
+        return None
 
     # Import/Export methods
     def export_settings(self, file_path: str) -> bool:

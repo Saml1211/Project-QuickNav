@@ -273,56 +273,219 @@ class SearchableComboBox(ttk.Frame):
 
 
 class CollapsibleFrame(ttk.Frame):
-    """Frame that can be collapsed and expanded."""
+    """Enhanced frame that can be collapsed and expanded with smooth animations."""
 
-    def __init__(self, parent, title: str = "", collapsed: bool = False, **kwargs):
+    def __init__(self, parent, title: str = "", collapsed: bool = False,
+                 show_indicator: bool = True, animate: bool = True, **kwargs):
         super().__init__(parent, **kwargs)
 
         self.title = title
         self.collapsed = tk.BooleanVar(value=collapsed)
+        self.show_indicator = show_indicator
+        self.animate = animate
+        self.animation_steps = 10
+        self.animation_delay = 20  # milliseconds
 
-        # Create header frame
-        self.header_frame = ttk.Frame(self)
-        self.header_frame.pack(fill=tk.X, pady=(0, 5))
+        # Store original height for animation
+        self.expanded_height = None
+        self.is_animating = False
 
-        # Create toggle button
-        self.toggle_button = ttk.Button(
-            self.header_frame,
-            text="▼" if not collapsed else "▶",
-            width=3,
-            command=self.toggle
-        )
-        self.toggle_button.pack(side=tk.LEFT)
+        # Callbacks
+        self.on_expand = None
+        self.on_collapse = None
 
-        # Create title label
+        # Create header frame with enhanced styling
+        self.header_frame = ttk.Frame(self, style="CollapsibleHeader.TFrame")
+        self.header_frame.pack(fill=tk.X, pady=(0, 2))
+
+        # Make header clickable
+        self.header_frame.bind("<Button-1>", lambda e: self.toggle())
+
+        # Create toggle indicator
+        if show_indicator:
+            self.toggle_button = ttk.Button(
+                self.header_frame,
+                text="▼" if not collapsed else "▶",
+                width=2,
+                command=self.toggle,
+                style="CollapsibleToggle.TButton"
+            )
+            self.toggle_button.pack(side=tk.LEFT, padx=(2, 6))
+
+        # Create title label with enhanced styling
         if title:
-            self.title_label = ttk.Label(self.header_frame, text=title)
-            self.title_label.pack(side=tk.LEFT, padx=(5, 0))
+            self.title_label = ttk.Label(
+                self.header_frame,
+                text=title,
+                style="CollapsibleTitle.TLabel",
+                cursor="hand2"
+            )
+            self.title_label.pack(side=tk.LEFT, padx=(0, 8), fill=tk.X, expand=True)
+            # Make title clickable
+            self.title_label.bind("<Button-1>", lambda e: self.toggle())
 
-        # Create content frame
+        # Create separator
+        self.separator = ttk.Separator(self, orient=tk.HORIZONTAL)
+        if not collapsed:
+            self.separator.pack(fill=tk.X, pady=(2, 8))
+
+        # Create content frame with padding
         self.content_frame = ttk.Frame(self)
         if not collapsed:
-            self.content_frame.pack(fill=tk.BOTH, expand=True)
+            self.content_frame.pack(fill=tk.BOTH, expand=True, padx=(16, 8), pady=(0, 8))
+
+        # Configure column weights for responsive behavior
+        self.header_frame.columnconfigure(1, weight=1)
 
         # Bind events
         self.collapsed.trace('w', self._on_collapse_change)
 
+        # Store initial state
+        self._initial_setup_complete = True
+
     def toggle(self):
-        """Toggle collapsed state."""
+        """Toggle collapsed state with optional animation."""
+        if self.is_animating:
+            return
+
         self.collapsed.set(not self.collapsed.get())
 
-    def _on_collapse_change(self, *args):
-        """Handle collapse state change."""
+    def expand(self):
+        """Expand the frame."""
+        if not self.collapsed.get():
+            return
+        self.collapsed.set(False)
+
+    def collapse(self):
+        """Collapse the frame."""
         if self.collapsed.get():
-            self.content_frame.pack_forget()
-            self.toggle_button.config(text="▶")
+            return
+        self.collapsed.set(True)
+
+    def _on_collapse_change(self, *args):
+        """Handle collapse state change with animation."""
+        if not hasattr(self, '_initial_setup_complete'):
+            return
+
+        if self.animate:
+            self._animate_toggle()
         else:
-            self.content_frame.pack(fill=tk.BOTH, expand=True)
+            self._instant_toggle()
+
+    def _instant_toggle(self):
+        """Instantly toggle without animation."""
+        if self.collapsed.get():
+            self._hide_content()
+            if self.on_collapse:
+                self.on_collapse()
+        else:
+            self._show_content()
+            if self.on_expand:
+                self.on_expand()
+
+    def _animate_toggle(self):
+        """Animate the toggle with smooth transition."""
+        if self.is_animating:
+            return
+
+        self.is_animating = True
+
+        if self.collapsed.get():
+            self._animate_collapse()
+        else:
+            self._animate_expand()
+
+    def _animate_collapse(self):
+        """Animate collapsing."""
+        # Store current height
+        self.update_idletasks()
+        current_height = self.content_frame.winfo_reqheight()
+
+        def collapse_step(step):
+            if step <= 0:
+                self._hide_content()
+                self.is_animating = False
+                if self.on_collapse:
+                    self.on_collapse()
+                return
+
+            # Calculate new height
+            progress = step / self.animation_steps
+            new_height = int(current_height * progress)
+
+            # Update content frame height
+            self.content_frame.configure(height=new_height)
+
+            # Schedule next step
+            self.after(self.animation_delay, lambda: collapse_step(step - 1))
+
+        collapse_step(self.animation_steps)
+
+    def _animate_expand(self):
+        """Animate expanding."""
+        # Show content first to measure height
+        self._show_content()
+        self.update_idletasks()
+        target_height = self.content_frame.winfo_reqheight()
+
+        # Start from 0 height
+        self.content_frame.configure(height=1)
+
+        def expand_step(step):
+            if step > self.animation_steps:
+                # Remove height constraint to allow natural sizing
+                self.content_frame.configure(height=0)
+                self.is_animating = False
+                if self.on_expand:
+                    self.on_expand()
+                return
+
+            # Calculate new height
+            progress = step / self.animation_steps
+            new_height = int(target_height * progress)
+
+            # Update content frame height
+            self.content_frame.configure(height=new_height)
+
+            # Schedule next step
+            self.after(self.animation_delay, lambda: expand_step(step + 1))
+
+        expand_step(1)
+
+    def _hide_content(self):
+        """Hide content and update UI elements."""
+        self.content_frame.pack_forget()
+        self.separator.pack_forget()
+        if self.show_indicator:
+            self.toggle_button.config(text="▶")
+
+    def _show_content(self):
+        """Show content and update UI elements."""
+        self.separator.pack(fill=tk.X, pady=(2, 8))
+        self.content_frame.pack(fill=tk.BOTH, expand=True, padx=(16, 8), pady=(0, 8))
+        if self.show_indicator:
             self.toggle_button.config(text="▼")
 
-    def add_content(self, widget):
-        """Add widget to content frame."""
-        widget.pack(in_=self.content_frame, fill=tk.BOTH, expand=True)
+    def add_content(self, widget, **pack_options):
+        """Add widget to content frame with enhanced packing options."""
+        default_options = {'fill': tk.BOTH, 'expand': True, 'pady': 2}
+        default_options.update(pack_options)
+        widget.pack(in_=self.content_frame, **default_options)
+
+    def set_callbacks(self, on_expand=None, on_collapse=None):
+        """Set callback functions for expand/collapse events."""
+        self.on_expand = on_expand
+        self.on_collapse = on_collapse
+
+    def is_collapsed(self):
+        """Return current collapsed state."""
+        return self.collapsed.get()
+
+    def set_title(self, new_title):
+        """Update the title."""
+        self.title = new_title
+        if hasattr(self, 'title_label'):
+            self.title_label.config(text=new_title)
 
 
 class ProgressDialog:
@@ -777,6 +940,348 @@ class DocumentPreview(ttk.Frame):
         self.metadata_text.config(state=tk.DISABLED)
 
         self.preview_label.config(text="Preview not available")
+
+
+class ResponsiveContainer(ttk.Frame):
+    """Container that adapts layout based on available space."""
+
+    def __init__(self, parent, **kwargs):
+        super().__init__(parent, **kwargs)
+
+        self.breakpoints = {
+            'small': 480,
+            'medium': 768,
+            'large': 1024,
+            'xlarge': 1200
+        }
+
+        self.current_size = 'large'
+        self.resize_callbacks = []
+
+        # Bind to configure events
+        self.bind('<Configure>', self._on_configure)
+
+    def _on_configure(self, event):
+        """Handle container resize."""
+        if event.widget != self:
+            return
+
+        width = event.width
+        new_size = self._get_size_category(width)
+
+        if new_size != self.current_size:
+            old_size = self.current_size
+            self.current_size = new_size
+            self._notify_resize(old_size, new_size)
+
+    def _get_size_category(self, width):
+        """Determine size category based on width."""
+        if width < self.breakpoints['small']:
+            return 'xsmall'
+        elif width < self.breakpoints['medium']:
+            return 'small'
+        elif width < self.breakpoints['large']:
+            return 'medium'
+        elif width < self.breakpoints['xlarge']:
+            return 'large'
+        else:
+            return 'xlarge'
+
+    def _notify_resize(self, old_size, new_size):
+        """Notify callbacks of size change."""
+        for callback in self.resize_callbacks:
+            try:
+                callback(old_size, new_size)
+            except Exception as e:
+                logger.error(f"Error in resize callback: {e}")
+
+    def add_resize_callback(self, callback):
+        """Add callback for resize events."""
+        self.resize_callbacks.append(callback)
+
+    def remove_resize_callback(self, callback):
+        """Remove resize callback."""
+        if callback in self.resize_callbacks:
+            self.resize_callbacks.remove(callback)
+
+    def get_current_size(self):
+        """Get current size category."""
+        return self.current_size
+
+    def is_small_screen(self):
+        """Check if current screen is small."""
+        return self.current_size in ['xsmall', 'small']
+
+    def is_medium_screen(self):
+        """Check if current screen is medium."""
+        return self.current_size == 'medium'
+
+    def is_large_screen(self):
+        """Check if current screen is large."""
+        return self.current_size in ['large', 'xlarge']
+
+
+class SidebarFrame(ttk.Frame):
+    """Collapsible sidebar frame for tools and settings."""
+
+    def __init__(self, parent, position='right', width=200, **kwargs):
+        super().__init__(parent, **kwargs)
+
+        self.position = position  # 'left' or 'right'
+        self.width = width
+        self.is_visible = tk.BooleanVar(value=False)
+        self.is_animating = False
+
+        # Create toggle button
+        self.toggle_button = ttk.Button(
+            parent,
+            text="◄" if position == 'right' else "►",
+            command=self.toggle,
+            width=3,
+            style="SidebarToggle.TButton"
+        )
+
+        # Create content frame
+        self.content_frame = ttk.Frame(self, style="Sidebar.TFrame")
+        self.content_frame.pack(fill=tk.BOTH, expand=True, padx=8, pady=8)
+
+        # Position elements
+        self._position_elements()
+
+        # Bind events
+        self.is_visible.trace('w', self._on_visibility_change)
+
+    def _position_elements(self):
+        """Position sidebar and toggle button."""
+        if self.position == 'right':
+            self.toggle_button.pack(side=tk.RIGHT, padx=(0, 4))
+            # Sidebar will be packed to right when visible
+        else:
+            self.toggle_button.pack(side=tk.LEFT, padx=(4, 0))
+            # Sidebar will be packed to left when visible
+
+    def toggle(self):
+        """Toggle sidebar visibility."""
+        if self.is_animating:
+            return
+        self.is_visible.set(not self.is_visible.get())
+
+    def show(self):
+        """Show the sidebar."""
+        if not self.is_visible.get():
+            self.is_visible.set(True)
+
+    def hide(self):
+        """Hide the sidebar."""
+        if self.is_visible.get():
+            self.is_visible.set(False)
+
+    def _on_visibility_change(self, *args):
+        """Handle visibility change."""
+        if self.is_visible.get():
+            self._show_sidebar()
+        else:
+            self._hide_sidebar()
+
+    def _show_sidebar(self):
+        """Show sidebar with animation."""
+        if self.position == 'right':
+            self.pack(side=tk.RIGHT, fill=tk.Y, padx=(4, 0))
+            self.toggle_button.config(text="►")
+        else:
+            self.pack(side=tk.LEFT, fill=tk.Y, padx=(0, 4))
+            self.toggle_button.config(text="◄")
+
+        # Animate width
+        self._animate_width(0, self.width)
+
+    def _hide_sidebar(self):
+        """Hide sidebar with animation."""
+        # Animate width to 0
+        self._animate_width(self.width, 0)
+
+    def _animate_width(self, start_width, end_width):
+        """Animate sidebar width."""
+        self.is_animating = True
+        steps = 10
+        delay = 20
+
+        def animate_step(step):
+            if step > steps:
+                self.configure(width=end_width)
+                if end_width == 0:
+                    self.pack_forget()
+                    if self.position == 'right':
+                        self.toggle_button.config(text="◄")
+                    else:
+                        self.toggle_button.config(text="►")
+                self.is_animating = False
+                return
+
+            progress = step / steps
+            current_width = start_width + (end_width - start_width) * progress
+            self.configure(width=int(current_width))
+
+            self.after(delay, lambda: animate_step(step + 1))
+
+        animate_step(1)
+
+    def add_tool(self, widget, **pack_options):
+        """Add a tool widget to the sidebar."""
+        default_options = {'fill': tk.X, 'pady': 2}
+        default_options.update(pack_options)
+        widget.pack(in_=self.content_frame, **default_options)
+
+
+class ProgressiveDisclosureFrame(ttk.Frame):
+    """Frame that shows basic options first and advanced options on demand."""
+
+    def __init__(self, parent, basic_title="Options", advanced_title="Advanced Options", **kwargs):
+        super().__init__(parent, **kwargs)
+
+        self.basic_title = basic_title
+        self.advanced_title = advanced_title
+
+        # Create basic options frame (always visible)
+        self.basic_frame = ttk.LabelFrame(self, text=basic_title)
+        self.basic_frame.pack(fill=tk.X, pady=(0, 8))
+
+        # Create collapsible advanced options frame
+        self.advanced_frame = CollapsibleFrame(
+            self,
+            title=advanced_title,
+            collapsed=True,
+            animate=True
+        )
+        self.advanced_frame.pack(fill=tk.X, pady=(8, 0))
+
+    def add_basic_option(self, widget, **pack_options):
+        """Add a widget to the basic options."""
+        default_options = {'padx': 10, 'pady': 4}
+        default_options.update(pack_options)
+        widget.pack(in_=self.basic_frame, **default_options)
+
+    def add_advanced_option(self, widget, **pack_options):
+        """Add a widget to the advanced options."""
+        self.advanced_frame.add_content(widget, **pack_options)
+
+    def expand_advanced(self):
+        """Expand the advanced options."""
+        self.advanced_frame.expand()
+
+    def collapse_advanced(self):
+        """Collapse the advanced options."""
+        self.advanced_frame.collapse()
+
+
+class AdaptiveButtonFrame(ttk.Frame):
+    """Button frame that adapts layout based on available space."""
+
+    def __init__(self, parent, **kwargs):
+        super().__init__(parent, **kwargs)
+
+        self.buttons = []
+        self.layout_mode = 'horizontal'  # 'horizontal' or 'vertical'
+        self.min_button_width = 100
+
+        # Bind to configure events
+        self.bind('<Configure>', self._on_configure)
+
+    def add_button(self, text, command, **button_options):
+        """Add a button to the adaptive frame."""
+        button = ttk.Button(self, text=text, command=command, **button_options)
+        self.buttons.append(button)
+        self._layout_buttons()
+        return button
+
+    def _on_configure(self, event):
+        """Handle frame resize and adapt layout."""
+        if event.widget != self:
+            return
+        self._adapt_layout()
+
+    def _adapt_layout(self):
+        """Adapt button layout based on available space."""
+        if not self.buttons:
+            return
+
+        available_width = self.winfo_width()
+        button_count = len(self.buttons)
+
+        # Calculate required width for horizontal layout
+        required_width = button_count * self.min_button_width + (button_count - 1) * 10  # 10px spacing
+
+        # Switch to vertical if not enough horizontal space
+        new_layout = 'horizontal' if available_width >= required_width else 'vertical'
+
+        if new_layout != self.layout_mode:
+            self.layout_mode = new_layout
+            self._layout_buttons()
+
+    def _layout_buttons(self):
+        """Layout buttons based on current mode."""
+        # Clear current layout
+        for button in self.buttons:
+            button.pack_forget()
+
+        if self.layout_mode == 'horizontal':
+            for i, button in enumerate(self.buttons):
+                padx = (0, 8) if i < len(self.buttons) - 1 else 0
+                button.pack(side=tk.LEFT, padx=padx, pady=2)
+        else:
+            for i, button in enumerate(self.buttons):
+                pady = (0, 4) if i < len(self.buttons) - 1 else 0
+                button.pack(fill=tk.X, pady=pady)
+
+    def set_minimum_button_width(self, width):
+        """Set minimum button width for layout calculations."""
+        self.min_button_width = width
+        self._adapt_layout()
+
+
+class ContextSensitiveFrame(ttk.Frame):
+    """Frame that shows/hides content based on context."""
+
+    def __init__(self, parent, **kwargs):
+        super().__init__(parent, **kwargs)
+
+        self.contexts = {}  # context_name -> widgets list
+        self.current_context = None
+
+    def add_context(self, context_name, widgets):
+        """Add a context with associated widgets."""
+        self.contexts[context_name] = widgets
+
+    def set_context(self, context_name):
+        """Switch to a specific context."""
+        if context_name == self.current_context:
+            return
+
+        # Hide current context widgets
+        if self.current_context and self.current_context in self.contexts:
+            for widget in self.contexts[self.current_context]:
+                widget.pack_forget()
+
+        # Show new context widgets
+        if context_name in self.contexts:
+            for widget in self.contexts[context_name]:
+                widget.pack(fill=tk.X, pady=2)
+
+        self.current_context = context_name
+
+    def get_current_context(self):
+        """Get the current context name."""
+        return self.current_context
+
+    def add_widget_to_context(self, context_name, widget):
+        """Add a widget to an existing context."""
+        if context_name not in self.contexts:
+            self.contexts[context_name] = []
+        self.contexts[context_name].append(widget)
+
+        # If this is the current context, show the widget
+        if context_name == self.current_context:
+            widget.pack(fill=tk.X, pady=2)
 
 
 class StatusBar(ttk.Frame):
