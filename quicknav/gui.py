@@ -158,6 +158,10 @@ class ProjectQuickNavGUI:
         self._setup_validation()
         self._apply_theme()
 
+        # Force widget refresh to ensure theme is visible
+        self.root.update_idletasks()
+        self.root.after(100, self._force_widget_refresh)
+
         # Restore window state
         self.restore_window_state()
 
@@ -1167,6 +1171,8 @@ class ProjectQuickNavGUI:
         """Toggle between light and dark themes."""
         self.theme.toggle_theme()
         self._apply_theme()
+        # Force widget refresh to ensure theme changes are visible
+        self.root.after(50, self._force_widget_refresh)
 
     def toggle_always_on_top(self):
         """Toggle always on top mode."""
@@ -1203,6 +1209,46 @@ class ProjectQuickNavGUI:
             logger.error(f"Unexpected error restoring window state: {e}")
             # Fallback to minimum size
             self.root.geometry(f"{self.min_width}x{self.min_height}")
+
+    def _force_widget_refresh(self):
+        """Force refresh of all widgets to apply theme changes."""
+        try:
+            # Force re-application of styles to all ttk widgets
+            def refresh_widget(widget):
+                try:
+                    if isinstance(widget, ttk.Widget):
+                        # Force widget to re-read its style by temporarily changing and restoring it
+                        try:
+                            original_style = widget.cget('style')
+                            widget.configure(style='')  # Clear style
+                            self.root.update_idletasks()
+                            widget.configure(style=original_style)  # Restore style
+                        except:
+                            # If no style, apply default for widget type
+                            widget_type = widget.__class__.__name__
+                            if widget_type.startswith('Ttk'):
+                                default_style = widget_type[3:]  # Remove 'Ttk' prefix
+                            else:
+                                default_style = widget_type
+                            try:
+                                widget.configure(style=f"T{default_style}")
+                            except:
+                                pass
+
+                    # Recurse to children
+                    for child in widget.winfo_children():
+                        refresh_widget(child)
+                except Exception:
+                    pass
+
+            # Refresh all widgets starting from root
+            refresh_widget(self.root)
+
+            # Force final update
+            self.root.update_idletasks()
+
+        except Exception as e:
+            logger.warning(f"Error refreshing widgets: {e}")
 
     def _get_responsive_geometry(self):
         """Get responsive geometry string based on screen size."""

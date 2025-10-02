@@ -234,6 +234,18 @@ class ThemeManager:
                     "bg": "#f0f0f0",
                     "fg": "#c0c0c0",
                     "active": "#a0a0a0"
+                },
+                "radiobutton": {
+                    "normal": {"bg": "#ffffff", "fg": "#1f1f1f", "indicator": "#ffffff"},
+                    "hover": {"bg": "#f0f0f0", "fg": "#1f1f1f", "indicator": "#e3f2fd"},
+                    "selected": {"bg": "#ffffff", "fg": "#1f1f1f", "indicator": "#1976d2"},
+                    "disabled": {"bg": "#ffffff", "fg": "#a0a0a0", "indicator": "#f0f0f0"}
+                },
+                "checkbutton": {
+                    "normal": {"bg": "#ffffff", "fg": "#1f1f1f", "indicator": "#ffffff"},
+                    "hover": {"bg": "#f0f0f0", "fg": "#1f1f1f", "indicator": "#e3f2fd"},
+                    "selected": {"bg": "#ffffff", "fg": "#1f1f1f", "indicator": "#1976d2"},
+                    "disabled": {"bg": "#ffffff", "fg": "#a0a0a0", "indicator": "#f0f0f0"}
                 }
             },
             "fonts": {
@@ -334,6 +346,18 @@ class ThemeManager:
                     "bg": "#3c3c3c",
                     "fg": "#606060",
                     "active": "#808080"
+                },
+                "radiobutton": {
+                    "normal": {"bg": "#2d2d30", "fg": "#ffffff", "indicator": "#1e1e1e"},
+                    "hover": {"bg": "#3c3c3c", "fg": "#ffffff", "indicator": "#404040"},
+                    "selected": {"bg": "#2d2d30", "fg": "#ffffff", "indicator": "#3399ff"},
+                    "disabled": {"bg": "#2d2d30", "fg": "#808080", "indicator": "#404040"}
+                },
+                "checkbutton": {
+                    "normal": {"bg": "#2d2d30", "fg": "#ffffff", "indicator": "#1e1e1e"},
+                    "hover": {"bg": "#3c3c3c", "fg": "#ffffff", "indicator": "#404040"},
+                    "selected": {"bg": "#2d2d30", "fg": "#ffffff", "indicator": "#3399ff"},
+                    "disabled": {"bg": "#2d2d30", "fg": "#808080", "indicator": "#404040"}
                 }
             },
             "fonts": {
@@ -494,6 +518,15 @@ class ThemeManager:
         # Update settings if available
         if self.settings:
             self.settings.set_theme(name)
+
+        # Force immediate style refresh
+        if hasattr(self, 'style') and self.style:
+            try:
+                # Clear and reconfigure all styles
+                self.style.theme_use('default')  # Reset to default
+                self._configure_ttk_styles(theme)  # Reapply custom styles
+            except Exception as e:
+                logger.debug(f"Style refresh error: {e}")
 
         # Notify callbacks
         self._notify_theme_change(theme)
@@ -768,17 +801,97 @@ class ThemeManager:
             ]
         )
 
-        # Configure TCheckbutton
-        self.style.configure("TCheckbutton",
-            background=theme.get_color("bg"),
-            foreground=theme.get_color("fg")
-        )
+        # Configure TCheckbutton with comprehensive styling
+        check_style = theme.get_style("checkbutton")
+        check_colors = check_style.get("colors", {})
 
-        # Configure TRadiobutton
-        self.style.configure("TRadiobutton",
-            background=theme.get_color("bg"),
-            foreground=theme.get_color("fg")
-        )
+        if check_colors:
+            normal = check_colors.get("normal", {})
+            hover = check_colors.get("hover", {})
+            selected = check_colors.get("selected", {})
+            disabled = check_colors.get("disabled", {})
+
+            self.style.configure("TCheckbutton",
+                background=normal.get("bg", theme.get_color("bg")),
+                foreground=normal.get("fg", theme.get_color("fg")),
+                focuscolor=theme.get_color("focus"),
+                indicatorbackground=normal.get("indicator", normal.get("bg", theme.get_color("bg"))),
+                indicatorforeground=normal.get("fg", theme.get_color("fg")),
+                indicatormargin=(2, 2, 4, 2),
+                padding=(6, 4)
+            )
+
+            self.style.map("TCheckbutton",
+                background=[
+                    ("active", hover.get("bg", normal.get("bg", theme.get_color("active_bg")))),
+                    ("pressed", hover.get("bg", normal.get("bg", theme.get_color("active_bg")))),
+                    ("disabled", disabled.get("bg", normal.get("bg")))
+                ],
+                foreground=[
+                    ("active", hover.get("fg", normal.get("fg", theme.get_color("fg")))),
+                    ("pressed", hover.get("fg", normal.get("fg", theme.get_color("fg")))),
+                    ("disabled", disabled.get("fg", theme.get_color("disabled_fg")))
+                ],
+                indicatorcolor=[
+                    ("selected", selected.get("indicator", theme.get_color("select_bg"))),
+                    ("pressed", selected.get("indicator", theme.get_color("select_bg"))),
+                    ("active", hover.get("indicator", normal.get("indicator"))),
+                    ("!selected", normal.get("indicator", theme.get_color("bg"))),
+                    ("disabled", disabled.get("indicator", theme.get_color("disabled_fg")))
+                ]
+            )
+        else:
+            # Fallback styling
+            self.style.configure("TCheckbutton",
+                background=theme.get_color("bg"),
+                foreground=theme.get_color("fg")
+            )
+
+        # Configure TRadiobutton with comprehensive styling
+        radio_style = theme.get_style("radiobutton")
+        radio_colors = radio_style.get("colors", {})
+
+        if radio_colors:
+            normal = radio_colors.get("normal", {})
+            hover = radio_colors.get("hover", {})
+            selected = radio_colors.get("selected", {})
+            disabled = radio_colors.get("disabled", {})
+
+            self.style.configure("TRadiobutton",
+                background=normal.get("bg", theme.get_color("bg")),
+                foreground=normal.get("fg", theme.get_color("fg")),
+                focuscolor=theme.get_color("focus"),
+                indicatorbackground=normal.get("indicator", normal.get("bg", theme.get_color("bg"))),
+                indicatorforeground=normal.get("fg", theme.get_color("fg")),
+                indicatormargin=(2, 2, 4, 2),
+                padding=(6, 4)
+            )
+
+            self.style.map("TRadiobutton",
+                background=[
+                    ("active", hover.get("bg", normal.get("bg", theme.get_color("active_bg")))),
+                    ("pressed", hover.get("bg", normal.get("bg", theme.get_color("active_bg")))),
+                    ("disabled", disabled.get("bg", normal.get("bg")))
+                ],
+                foreground=[
+                    ("active", hover.get("fg", normal.get("fg", theme.get_color("fg")))),
+                    ("pressed", hover.get("fg", normal.get("fg", theme.get_color("fg")))),
+                    ("disabled", disabled.get("fg", theme.get_color("disabled_fg")))
+                ],
+                indicatorcolor=[
+                    ("selected", selected.get("indicator", theme.get_color("select_bg"))),
+                    ("pressed", selected.get("indicator", theme.get_color("select_bg"))),
+                    ("active", hover.get("indicator", normal.get("indicator"))),
+                    ("!selected", normal.get("indicator", theme.get_color("bg"))),
+                    ("disabled", disabled.get("indicator", theme.get_color("disabled_fg")))
+                ]
+            )
+        else:
+            # Fallback styling
+            self.style.configure("TRadiobutton",
+                background=theme.get_color("bg"),
+                foreground=theme.get_color("fg")
+            )
 
         # Configure Progressbar
         progressbar_style = theme.get_style("progressbar")
