@@ -191,16 +191,16 @@ class ThemeManager:
                     "fg": "#000000"
                 },
                 "frame": {
-                    "bg": "#f8f9fa",
+                    "bg": "#ffffff",
                     "fg": "#000000"
                 },
                 "button": {
-                    "normal": {"bg": "#ffffff", "fg": "#000000", "border": "#d0d0d0"},
-                    "hover": {"bg": "#e1ecf4", "fg": "#000000", "border": "#b3c7d6"},
-                    "pressed": {"bg": "#cce4f7", "fg": "#000000", "border": "#9db4c7"},
+                    "normal": {"bg": "#f6f6f6", "fg": "#1f1f1f", "border": "#d1d1d1"},
+                    "hover": {"bg": "#e3f2fd", "fg": "#1f1f1f", "border": "#90caf9"},
+                    "pressed": {"bg": "#bbdefb", "fg": "#1f1f1f", "border": "#64b5f6"},
                     "disabled": {"bg": "#f0f0f0", "fg": "#a0a0a0", "border": "#e0e0e0"},
-                    "primary": {"bg": "#0078d4", "fg": "#ffffff", "border": "#106ebe"},
-                    "primary_hover": {"bg": "#106ebe", "fg": "#ffffff", "border": "#005a9e"}
+                    "primary": {"bg": "#1976d2", "fg": "#ffffff", "border": "#1565c0"},
+                    "primary_hover": {"bg": "#1565c0", "fg": "#ffffff", "border": "#0d47a1"}
                 },
                 "entry": {
                     "normal": {"bg": "#ffffff", "fg": "#000000"},
@@ -216,7 +216,7 @@ class ThemeManager:
                     "disabled": {"bg": "#ffffff", "fg": "#a0a0a0"}
                 },
                 "labelframe": {
-                    "normal": {"bg": "#ffffff", "fg": "#000000", "border": "#d0d0d0"}
+                    "normal": {"bg": "#ffffff", "fg": "#1f1f1f", "border": "#e0e0e0"}
                 },
                 "text": {
                     "normal": {"bg": "#ffffff", "fg": "#000000"},
@@ -261,8 +261,10 @@ class ThemeManager:
             "geometry": {
                 "border_width": 1,
                 "relief": "flat",
-                "padding": 5,
-                "button_padding": 8
+                "padding": 8,
+                "button_padding": 12,
+                "section_spacing": 16,
+                "input_padding": 12
             }
         }
 
@@ -293,10 +295,10 @@ class ThemeManager:
                     "fg": "#ffffff"
                 },
                 "button": {
-                    "normal": {"bg": "#3c3c3c", "fg": "#ffffff", "border": "#5a5a5a"},
-                    "hover": {"bg": "#464647", "fg": "#ffffff", "border": "#646464"},
-                    "pressed": {"bg": "#525252", "fg": "#ffffff", "border": "#6e6e6e"},
-                    "disabled": {"bg": "#404040", "fg": "#808080", "border": "#505050"},
+                    "normal": {"bg": "#404040", "fg": "#ffffff", "border": "#606060"},
+                    "hover": {"bg": "#4a4a4a", "fg": "#ffffff", "border": "#707070"},
+                    "pressed": {"bg": "#505050", "fg": "#ffffff", "border": "#808080"},
+                    "disabled": {"bg": "#383838", "fg": "#909090", "border": "#555555"},
                     "primary": {"bg": "#0078d4", "fg": "#ffffff", "border": "#106ebe"},
                     "primary_hover": {"bg": "#106ebe", "fg": "#ffffff", "border": "#005a9e"}
                 },
@@ -314,7 +316,7 @@ class ThemeManager:
                     "disabled": {"bg": "#2d2d30", "fg": "#808080"}
                 },
                 "labelframe": {
-                    "normal": {"bg": "#2d2d30", "fg": "#ffffff", "border": "#5a5a5a"}
+                    "normal": {"bg": "#2d2d30", "fg": "#ffffff", "border": "#606060"}
                 },
                 "text": {
                     "normal": {"bg": "#1e1e1e", "fg": "#ffffff"},
@@ -359,8 +361,10 @@ class ThemeManager:
             "geometry": {
                 "border_width": 1,
                 "relief": "flat",
-                "padding": 5,
-                "button_padding": 8
+                "padding": 8,
+                "button_padding": 12,
+                "section_spacing": 16,
+                "input_padding": 12
             }
         }
 
@@ -564,13 +568,7 @@ class ThemeManager:
             foreground=theme.get_color("fg")
         )
 
-        # Configure button text to ensure visibility
-        if self.current_theme == "dark":
-            # Force white text on dark buttons
-            self.style.configure("TButton", foreground="#ffffff")
-        else:
-            # Force dark text on light buttons
-            self.style.configure("TButton", foreground="#000000")
+        # Note: Button colors will be set properly in the TButton configuration below
 
         # Configure TButton
         button_style = theme.get_style("button")
@@ -583,7 +581,7 @@ class ThemeManager:
             primary = button_colors.get("primary", {})
             primary_hover = button_colors.get("primary_hover", {})
 
-            # Default button style
+            # Default button style with proper colors
             self.style.configure("TButton",
                 background=normal.get("bg", theme.get_color("bg")),
                 foreground=normal.get("fg", theme.get_color("fg")),
@@ -681,6 +679,8 @@ class ThemeManager:
                 lightcolor=normal.get("bg", theme.get_color("bg")),
                 darkcolor=normal.get("bg", theme.get_color("bg")),
                 insertcolor=normal.get("fg", theme.get_color("fg")),
+                selectbackground=theme.get_color("select_bg"),
+                selectforeground=theme.get_color("select_fg"),
                 padding=(theme.get_geometry("element").get("input_padding", 10), 8)
             )
 
@@ -835,21 +835,41 @@ class ThemeManager:
         def get_safe_color(element: str, state: str = "normal", prop: str = "bg") -> str:
             """Safely extract color from theme, handling nested structures."""
             try:
+                # Get element style first
+                element_style = theme.get_style(element)
+                colors = element_style.get("colors", {})
+
+                if isinstance(colors, dict):
+                    if state in colors:
+                        state_colors = colors[state]
+                        if isinstance(state_colors, dict):
+                            return state_colors.get(prop, "#000000")
+                        else:
+                            return state_colors if state_colors else "#000000"
+                    elif "normal" in colors:
+                        normal_colors = colors["normal"]
+                        if isinstance(normal_colors, dict):
+                            return normal_colors.get(prop, "#000000")
+                        else:
+                            return normal_colors if normal_colors else "#000000"
+
+                # Fallback to direct theme color
                 color_data = theme.get_color(element, state)
                 if isinstance(color_data, dict):
                     return color_data.get(prop, "#000000")
                 return color_data if color_data else "#000000"
-            except:
+            except Exception as e:
+                logger.debug(f"Color extraction error for {element}.{state}.{prop}: {e}")
                 return "#000000"
 
-        # Get default colors
-        bg = get_safe_color("window", "normal", "bg")
-        fg = get_safe_color("window", "normal", "fg")
-        select_bg = get_safe_color("window", "select", "bg")
-        select_fg = get_safe_color("window", "select", "fg")
-        active_bg = get_safe_color("window", "active", "bg")
-        active_fg = get_safe_color("window", "active", "fg")
-        disabled_fg = get_safe_color("window", "disabled", "fg")
+        # Get default colors - fallback to theme defaults if window colors not available
+        bg = get_safe_color("window", "normal", "bg") or theme.get_color("bg")
+        fg = get_safe_color("window", "normal", "fg") or theme.get_color("fg")
+        select_bg = get_safe_color("window", "select", "bg") or theme.get_color("select_bg")
+        select_fg = get_safe_color("window", "select", "fg") or theme.get_color("select_fg")
+        active_bg = get_safe_color("window", "active", "bg") or theme.get_color("active_bg")
+        active_fg = get_safe_color("window", "active", "fg") or theme.get_color("active_fg")
+        disabled_fg = get_safe_color("window", "disabled", "fg") or theme.get_color("disabled_fg")
 
         # Configure default options
         root.option_add("*Background", bg)

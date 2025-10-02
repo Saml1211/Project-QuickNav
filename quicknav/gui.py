@@ -132,8 +132,12 @@ class ProjectQuickNavGUI:
 
         # UI state
         self.is_resizing = False
-        self.min_width = 520
-        self.min_height = 820
+        self.min_width = 420
+        self.min_height = 720  # Increased to show all components
+
+        # DPI awareness
+        self.dpi_scale = self._get_dpi_scale()
+        self._apply_dpi_scaling()
 
         # Task queue for async operations
         self.task_queue = queue.Queue()
@@ -163,7 +167,38 @@ class ProjectQuickNavGUI:
         # Update AI UI
         self._update_ai_ui()
 
+        # Initialize navigation state
+        self.last_search_result = None
+        self.last_search_type = None
+
         logger.info("ProjectQuickNavGUI initialized successfully")
+
+    def _get_dpi_scale(self):
+        """Get DPI scaling factor for the display."""
+        try:
+            # Get DPI from tkinter
+            dpi = self.root.winfo_fpixels('1i')
+            # Standard DPI is 96
+            scale = dpi / 96.0
+            # Clamp scale between 1.0 and 3.0
+            return max(1.0, min(3.0, scale))
+        except Exception:
+            return 1.0
+
+    def _apply_dpi_scaling(self):
+        """Apply DPI scaling to the interface."""
+        if self.dpi_scale > 1.1:  # Only scale if significantly different
+            try:
+                # Scale fonts
+                import tkinter.font as tkFont
+                default_font = tkFont.nametofont("TkDefaultFont")
+                default_font.configure(size=int(default_font['size'] * self.dpi_scale))
+
+                # Adjust minimum window size for DPI
+                self.min_width = int(self.min_width * self.dpi_scale)
+                self.min_height = int(self.min_height * self.dpi_scale)
+            except Exception as e:
+                logger.warning(f"Failed to apply DPI scaling: {e}")
 
     def _ensure_main_thread(self, func, *args, **kwargs):
         """Ensure a function runs in the main thread."""
@@ -174,15 +209,24 @@ class ProjectQuickNavGUI:
 
     def _setup_ui(self):
         """Set up the main user interface."""
-        # Configure root window with saved or default dimensions
+        # Configure root window with responsive geometry
         saved_geometry = self.settings.get_window_geometry()
+        if not saved_geometry or not self._is_geometry_on_screen(saved_geometry):
+            saved_geometry = self._get_responsive_geometry()
+            # Save the new geometry
+            self.settings.set_window_geometry(saved_geometry)
+
         self.root.geometry(saved_geometry)
         self.root.minsize(self.min_width, self.min_height)
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
 
-        # Create main container with enhanced padding and styling
+        # Ensure window is properly sized
+        self.root.update_idletasks()
+
+        # Create main container with responsive padding
+        padding = max(8, int(12 * self.dpi_scale))
         self.main_frame = ttk.Frame(self.root)
-        self.main_frame.pack(fill=tk.BOTH, expand=True, padx=24, pady=24)
+        self.main_frame.pack(fill=tk.BOTH, expand=True, padx=padding, pady=padding)
 
         # Configure grid weights for responsive layout
         self.main_frame.columnconfigure(0, weight=1)
@@ -202,17 +246,20 @@ class ProjectQuickNavGUI:
         """Create project input section with enhanced styling."""
         # Project input frame with improved styling
         input_frame = ttk.LabelFrame(self.main_frame, text="Project Input")
-        input_frame.grid(row=0, column=0, sticky="ew", pady=(0, 20))
+        input_frame.grid(row=0, column=0, sticky="ew", pady=(0, 16))
         input_frame.columnconfigure(0, weight=1)
 
-        # Project entry with enhanced features and better styling
+        # Project entry with enhanced features and responsive styling
+        entry_font_size = max(9, min(12, int(10 * self.dpi_scale)))
         self.project_entry = EnhancedEntry(
             input_frame,
             textvariable=self.project_input,
             placeholder="Enter 5-digit project number or search term",
-            font=("Segoe UI", 11)
+            font=("Segoe UI", entry_font_size)
         )
-        self.project_entry.grid(row=0, column=0, sticky="ew", padx=16, pady=16, ipady=4)
+        entry_padding = max(12, int(16 * self.dpi_scale))
+        ipady_value = max(3, int(4 * self.dpi_scale))
+        self.project_entry.grid(row=0, column=0, sticky="ew", padx=entry_padding, pady=entry_padding, ipady=ipady_value)
 
         # Bind validation events
         self.project_entry.bind('<KeyRelease>', self._on_project_input_change)
@@ -222,7 +269,7 @@ class ProjectQuickNavGUI:
         """Create navigation mode selection section with enhanced styling."""
         # Navigation mode frame with improved styling
         nav_frame = ttk.LabelFrame(self.main_frame, text="Navigation Mode")
-        nav_frame.grid(row=1, column=0, sticky="ew", pady=(0, 20))
+        nav_frame.grid(row=1, column=0, sticky="ew", pady=(0, 16))
         nav_frame.columnconfigure(0, weight=1)
 
         # Mode selection frame with improved spacing
@@ -254,7 +301,7 @@ class ProjectQuickNavGUI:
         """Create folder selection section for folder mode."""
         # Folder selection frame
         self.folder_frame = ttk.LabelFrame(self.main_frame, text="Select Subfolder")
-        self.folder_frame.grid(row=2, column=0, sticky="ew", pady=(0, 15))
+        self.folder_frame.grid(row=2, column=0, sticky="ew", pady=(0, 16))
 
         # Folder options
         folder_options = [
@@ -282,7 +329,7 @@ class ProjectQuickNavGUI:
         """Create document type and filter section for document mode."""
         # Document mode frame (initially hidden)
         self.doc_frame = ttk.LabelFrame(self.main_frame, text="Document Type & Filters")
-        self.doc_frame.grid(row=3, column=0, sticky="ew", pady=(0, 15))
+        self.doc_frame.grid(row=3, column=0, sticky="ew", pady=(0, 16))
         self.doc_frame.columnconfigure(1, weight=1)
 
         # Document type selection
@@ -364,7 +411,7 @@ class ProjectQuickNavGUI:
         """Create options section."""
         # Options frame
         options_frame = ttk.LabelFrame(self.main_frame, text="Options")
-        options_frame.grid(row=4, column=0, sticky="ew", pady=(0, 15))
+        options_frame.grid(row=4, column=0, sticky="ew", pady=(0, 16))
 
         # Options container
         opts_container = ttk.Frame(options_frame)
@@ -390,7 +437,7 @@ class ProjectQuickNavGUI:
         """Create AI toolbar with enhanced styling."""
         # AI Toolbar frame with improved styling
         ai_frame = ttk.LabelFrame(self.main_frame, text="AI Assistant")
-        ai_frame.grid(row=5, column=0, sticky="ew", pady=(0, 20))
+        ai_frame.grid(row=5, column=0, sticky="ew", pady=(0, 16))
 
         # AI controls container
         ai_container = ttk.Frame(ai_frame)
@@ -427,14 +474,15 @@ class ProjectQuickNavGUI:
         """Create status section."""
         # Status frame
         status_frame = ttk.Frame(self.main_frame)
-        status_frame.grid(row=6, column=0, sticky="ew", pady=(0, 15))
+        status_frame.grid(row=6, column=0, sticky="ew", pady=(0, 16))
         status_frame.columnconfigure(0, weight=1)
 
-        # Status label
+        # Status label with responsive wrapping
+        wrap_length = max(300, int(self.min_width * 0.8))
         self.status_label = ttk.Label(
             status_frame,
             textvariable=self.status_text,
-            wraplength=400,
+            wraplength=wrap_length,
             justify="left"
         )
         self.status_label.grid(row=0, column=0, sticky="ew")
@@ -451,7 +499,7 @@ class ProjectQuickNavGUI:
         """Create action buttons with enhanced styling."""
         # Button frame with improved spacing
         button_frame = ttk.Frame(self.main_frame)
-        button_frame.grid(row=7, column=0, sticky="ew", pady=(20, 0))
+        button_frame.grid(row=7, column=0, sticky="ew", pady=(16, 0))
 
         # Center the buttons with improved spacing
         button_container = ttk.Frame(button_frame)
@@ -471,14 +519,23 @@ class ProjectQuickNavGUI:
             button_container,
             text="Find Documents",
             command=self.execute_document_navigation,
-            width=18
+            width=16
         )
 
         self.choose_button = ttk.Button(
             button_container,
             text="Choose From List",
             command=lambda: self.execute_document_navigation(choose_mode=True),
-            width=18
+            width=16
+        )
+
+        # Open/Navigate button (appears after successful search)
+        self.navigate_button = ttk.Button(
+            button_container,
+            text="Open Selected",
+            command=self._execute_final_navigation,
+            width=16,
+            state=tk.DISABLED
         )
 
     def _create_menu_bar(self):
@@ -553,9 +610,21 @@ class ProjectQuickNavGUI:
         """Apply the current theme."""
         self.theme.apply_theme(self.root)
 
-        # Update status based on current theme
-        if self.theme.current_theme == "dark":
-            self.status_text.set("Dark theme applied - " + self.status_text.get())
+        # Force update after theme change
+        self.root.update_idletasks()
+
+        # Ensure proper window colors
+        current_theme_obj = self.theme.get_current_theme()
+        if current_theme_obj:
+            window_bg = current_theme_obj.get_color("window", "bg") or current_theme_obj.get_color("bg")
+            if window_bg:
+                self.root.configure(bg=window_bg)
+                # Update main frame background too
+                if hasattr(self, 'main_frame'):
+                    try:
+                        self.main_frame.configure(style="TFrame")
+                    except:
+                        pass
 
     def _start_task_processor(self):
         """Start the background task processor."""
@@ -619,9 +688,10 @@ class ProjectQuickNavGUI:
             self.doc_frame.grid_remove()
 
             # Show/hide appropriate buttons
-            self.open_button.pack(side="left", padx=(0, 10))
+            self.open_button.pack(side="left", padx=(0, 8))
             self.find_button.pack_forget()
             self.choose_button.pack_forget()
+            self.navigate_button.pack_forget()
 
             self.status_text.set("Folder mode - Select a project subfolder to open")
 
@@ -632,8 +702,12 @@ class ProjectQuickNavGUI:
 
             # Show/hide appropriate buttons
             self.open_button.pack_forget()
-            self.find_button.pack(side="left", padx=(0, 10))
-            self.choose_button.pack(side="left")
+            self.find_button.pack(side="left", padx=(0, 8))
+            self.choose_button.pack(side="left", padx=(0, 8))
+            if hasattr(self, 'last_search_result') and self.last_search_result:
+                self.navigate_button.pack(side="left")
+            else:
+                self.navigate_button.pack_forget()
 
             self.status_text.set("Document mode - Find specific documents by type and filters")
 
@@ -644,9 +718,10 @@ class ProjectQuickNavGUI:
     def _on_window_configure(self, event=None):
         """Handle window configuration changes."""
         if event and event.widget == self.root:
-            # Update minimum size based on content
+            # Update responsive elements based on window size
             if not self.is_resizing:
                 self.is_resizing = True
+                self._update_responsive_layout()
                 self.root.after(100, lambda: setattr(self, 'is_resizing', False))
 
     def _on_key_press(self, event):
@@ -820,7 +895,11 @@ class ProjectQuickNavGUI:
         if status == 'SUCCESS':
             path = result.get('path')
             folder = result.get('folder')
-            self._open_folder(path)
+            # Store result for potential navigation
+            self.last_search_result = {'path': path, 'folder': folder}
+            self.last_search_type = 'project'
+            # Directly open in folder mode
+            self._open_folder_with_subfolder(path, folder)
             self.status_text.set(f"Opened folder: {folder}")
 
             # Auto-hide after success
@@ -829,17 +908,25 @@ class ProjectQuickNavGUI:
         elif status == 'SELECT':
             paths = result.get('paths', [])
             folder = result.get('folder')
+            self.last_search_result = {'paths': paths, 'folder': folder}
+            self.last_search_type = 'project_select'
             self._show_selection_dialog(paths, folder, 'project')
+            self._enable_navigate_button()
 
         elif status == 'SEARCH':
             paths = result.get('paths', [])
             folder = result.get('folder')
+            self.last_search_result = {'paths': paths, 'folder': folder}
+            self.last_search_type = 'project_search'
             self._show_search_dialog(paths, folder)
+            self._enable_navigate_button()
 
         elif status == 'ERROR':
             error = result.get('error', 'Unknown error')
             self._show_error(error)
             self.status_text.set("Project not found")
+            self.last_search_result = None
+            self._disable_navigate_button()
 
     def _handle_document_result(self, result: Dict[str, Any]):
         """Handle document navigation result."""
@@ -847,6 +934,10 @@ class ProjectQuickNavGUI:
 
         if status == 'SUCCESS':
             path = result.get('path')
+            # Store result for potential navigation
+            self.last_search_result = {'path': path}
+            self.last_search_type = 'document'
+            # Directly open the document
             self._open_file(path)
             self.status_text.set("Opened document")
 
@@ -855,12 +946,17 @@ class ProjectQuickNavGUI:
 
         elif status == 'SELECT':
             paths = result.get('paths', [])
+            self.last_search_result = {'paths': paths}
+            self.last_search_type = 'document_select'
             self._show_selection_dialog(paths, None, 'document')
+            self._enable_navigate_button()
 
         elif status == 'ERROR':
             error = result.get('error', 'Unknown error')
             self._show_error(error)
             self.status_text.set("Documents not found")
+            self.last_search_result = None
+            self._disable_navigate_button()
 
     def _handle_training_result(self, result: Dict[str, Any]):
         """Handle training data generation result."""
@@ -897,10 +993,19 @@ class ProjectQuickNavGUI:
 
     def _handle_selection(self, path: str, folder: Optional[str], selection_type: str):
         """Handle user selection from dialog."""
+        # Update search result with selected path
         if selection_type == 'project':
+            self.last_search_result = {'path': path, 'folder': folder}
+            self.last_search_type = 'project'
             self._open_folder_with_subfolder(path, folder)
         else:
+            self.last_search_result = {'path': path}
+            self.last_search_type = 'document'
             self._open_file(path)
+
+        self.status_text.set("Selection opened")
+        # Auto-hide after success
+        self.root.after(1500, self.hide_window)
 
     def _open_folder(self, path: str):
         """Open folder in file explorer."""
@@ -956,13 +1061,96 @@ class ProjectQuickNavGUI:
         messagebox.showerror("Error", message)
         logger.error(f"Error shown to user: {message}")
 
+    def _execute_final_navigation(self):
+        """Execute final navigation using stored search result."""
+        if not self.last_search_result:
+            self.status_text.set("No search result to navigate to")
+            return
+
+        try:
+            if self.last_search_type in ['project', 'project_select', 'project_search']:
+                path = self.last_search_result.get('path')
+                folder = self.last_search_result.get('folder', self.selected_folder.get())
+                if path:
+                    self._open_folder_with_subfolder(path, folder)
+                    self.status_text.set(f"Opened folder: {folder}")
+                    self.root.after(1500, self.hide_window)
+                else:
+                    self.status_text.set("No valid path selected")
+            elif self.last_search_type in ['document', 'document_select']:
+                path = self.last_search_result.get('path')
+                if path:
+                    self._open_file(path)
+                    self.status_text.set("Opened document")
+                    self.root.after(1500, self.hide_window)
+                else:
+                    self.status_text.set("No valid document selected")
+        except Exception as e:
+            logger.exception("Final navigation failed")
+            self._show_error(f"Failed to open: {e}")
+
+    def _enable_navigate_button(self):
+        """Enable the navigate button when results are available."""
+        if hasattr(self, 'navigate_button'):
+            self.navigate_button.config(state=tk.NORMAL)
+            if self.current_mode.get() == "document":
+                self.navigate_button.pack(side="left")
+
+    def _disable_navigate_button(self):
+        """Disable the navigate button when no results are available."""
+        if hasattr(self, 'navigate_button'):
+            self.navigate_button.config(state=tk.DISABLED)
+            self.navigate_button.pack_forget()
+
+    def _update_responsive_layout(self):
+        """Update layout elements for current window size."""
+        try:
+            current_width = self.root.winfo_width()
+            current_height = self.root.winfo_height()
+
+            # Update status label wrap length based on window width
+            if hasattr(self, 'status_label'):
+                wrap_length = max(300, int(current_width * 0.8))
+                self.status_label.config(wraplength=wrap_length)
+
+            # Adjust button layout for narrow windows
+            if hasattr(self, 'open_button') and current_width < 500:
+                # Stack buttons vertically for narrow windows
+                button_width = max(12, int(current_width * 0.25))
+                self.open_button.config(width=button_width)
+                if hasattr(self, 'find_button'):
+                    self.find_button.config(width=button_width)
+                if hasattr(self, 'choose_button'):
+                    self.choose_button.config(width=button_width)
+                if hasattr(self, 'navigate_button'):
+                    self.navigate_button.config(width=button_width)
+            else:
+                # Normal horizontal layout
+                self.open_button.config(width=16)
+                if hasattr(self, 'find_button'):
+                    self.find_button.config(width=16)
+                if hasattr(self, 'choose_button'):
+                    self.choose_button.config(width=16)
+                if hasattr(self, 'navigate_button'):
+                    self.navigate_button.config(width=16)
+
+        except Exception as e:
+            logger.warning(f"Failed to update responsive layout: {e}")
+
     # UI state methods
     def show_window(self):
         """Show the main window."""
+        # Ensure proper geometry before showing
+        if self.root.geometry() == "1x1+0+0" or self.root.winfo_width() < self.min_width:
+            self.root.geometry(self._get_responsive_geometry())
+
         self.root.deiconify()
         self.root.lift()
         self.root.focus_force()
         self.project_entry.focus_set()
+
+        # Update layout after showing
+        self.root.update_idletasks()
 
     def hide_window(self):
         """Hide the main window."""
@@ -1003,14 +1191,46 @@ class ProjectQuickNavGUI:
                 if self._is_geometry_on_screen(geometry):
                     self.root.geometry(geometry)
                 else:
-                    # Reset to default if off-screen
-                    self.root.geometry("520x820")
-                    logger.info("Window was off-screen, reset to default geometry")
+                    # Reset to responsive default if off-screen
+                    self.root.geometry(self._get_responsive_geometry())
+                    logger.info("Window was off-screen, reset to responsive geometry")
 
         except (tk.TclError, ValueError, KeyError) as e:
             logger.warning(f"Window state restoration error: {e}")
+            # Fallback to responsive geometry
+            self.root.geometry(self._get_responsive_geometry())
         except Exception as e:
             logger.error(f"Unexpected error restoring window state: {e}")
+            # Fallback to minimum size
+            self.root.geometry(f"{self.min_width}x{self.min_height}")
+
+    def _get_responsive_geometry(self):
+        """Get responsive geometry string based on screen size."""
+        try:
+            screen_width = self.root.winfo_screenwidth()
+            screen_height = self.root.winfo_screenheight()
+
+            # Calculate size based on screen resolution and DPI
+            if screen_width >= 2560:  # 2K/4K displays
+                width_factor = 0.25
+                height_factor = 0.45  # Increased for better fit
+            elif screen_width >= 1920:  # 1080p displays
+                width_factor = 0.3
+                height_factor = 0.5   # Increased for better fit
+            else:  # Smaller displays
+                width_factor = 0.4
+                height_factor = 0.6   # Increased for better fit
+
+            width = max(self.min_width, int(screen_width * width_factor))
+            height = max(self.min_height, int(screen_height * height_factor))
+
+            # Center on screen
+            x = (screen_width - width) // 2
+            y = (screen_height - height) // 2
+
+            return f"{width}x{height}+{x}+{y}"
+        except Exception:
+            return f"{self.min_width}x{self.min_height}"
 
     def _is_geometry_on_screen(self, geometry: str) -> bool:
         """Check if geometry would place window on screen."""

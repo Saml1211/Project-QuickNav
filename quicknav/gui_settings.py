@@ -256,7 +256,7 @@ class SettingsManager:
 
     def get_window_geometry(self) -> str:
         """Get window geometry."""
-        return self.get("ui.window_geometry", "520x820")
+        return self.get("ui.window_geometry", "")
 
     def get_default_mode(self) -> str:
         """Get default navigation mode."""
