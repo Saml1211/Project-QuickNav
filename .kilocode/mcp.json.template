@@ -1,0 +1,40 @@
+{
+  "mcpServers": {
+    "exa": {
+      "command": "cmd",
+      "args": [
+        "/c",
+        "npx",
+        "-y",
+        "@smithery/cli@latest",
+        "run",
+        "exa",
+        "--key",
+        "${SMITHERY_API_KEY}",
+        "--profile",
+        "${SMITHERY_PROFILE}"
+      ],
+      "alwaysAllow": [
+        "web_search_exa"
+      ]
+    },
+    "ref-tools-mcp": {
+      "command": "cmd",
+      "args": [
+        "/c",
+        "npx",
+        "-y",
+        "@smithery/cli@latest",
+        "run",
+        "@ref-tools/ref-tools-mcp",
+        "--key",
+        "${SMITHERY_API_KEY}",
+        "--profile",
+        "${SMITHERY_PROFILE}"
+      ],
+      "alwaysAllow": [
+        "ref_search_documentation"
+      ]
+    }
+  }
+}

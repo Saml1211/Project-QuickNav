@@ -1,0 +1,40 @@
+{
+  "mcpServers": {
+    "exa": {
+      "command": "cmd",
+      "args": [
+        "/c",
+        "npx",
+        "-y",
+        "@smithery/cli@latest",
+        "run",
+        "exa",
+        "--key",
+        "6c62b8d7-48e8-4fcb-a610-13f896687cee",
+        "--profile",
+        "improved-tern-88G1Gw"
+      ],
+      "alwaysAllow": [
+        "web_search_exa"
+      ]
+    },
+    "ref-tools-mcp": {
+      "command": "cmd",
+      "args": [
+        "/c",
+        "npx",
+        "-y",
+        "@smithery/cli@latest",
+        "run",
+        "@ref-tools/ref-tools-mcp",
+        "--key",
+        "6c62b8d7-48e8-4fcb-a610-13f896687cee",
+        "--profile",
+        "improved-tern-88G1Gw"
+      ],
+      "alwaysAllow": [
+        "ref_search_documentation"
+      ]
+    }
+  }
+}
