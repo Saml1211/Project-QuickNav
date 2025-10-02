@@ -214,7 +214,7 @@ python src/find_project_path.py 17741 --training-data
 
 - OneDrive path auto-detection via `%UserProfile%\OneDrive - Pro AV Solutions`
 - Test environment fallback when OneDrive unavailable
-- Training data saved to `C:/Users/SamLyndon/Projects/Work/av-project-analysis-tools/training_data/`
+- Training data saved to configurable directory (default: `~/.quicknav/training_data/`, override with `QUICKNAV_TRAINING_DIR`)
 - GUI settings stored in platform-appropriate locations (AppData/Library/config)
 - Cross-platform: Backend/MCP/GUI work on any OS; AutoHotkey requires Windows
 

@@ -10,9 +10,9 @@
         "run",
         "exa",
         "--key",
-        "6c62b8d7-48e8-4fcb-a610-13f896687cee",
+        "${SMITHERY_API_KEY}",
         "--profile",
-        "improved-tern-88G1Gw"
+        "${SMITHERY_PROFILE}"
       ],
       "alwaysAllow": [
         "web_search_exa"
@@ -28,9 +28,9 @@
         "run",
         "@ref-tools/ref-tools-mcp",
         "--key",
-        "6c62b8d7-48e8-4fcb-a610-13f896687cee",
+        "${SMITHERY_API_KEY}",
         "--profile",
-        "improved-tern-88G1Gw"
+        "${SMITHERY_PROFILE}"
       ],
       "alwaysAllow": [
         "ref_search_documentation"

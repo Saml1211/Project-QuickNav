@@ -2,6 +2,7 @@
 
 import subprocess
 import sys
+import os
 from mcp_server.server import mcp, error_handler
 from mcp_server import user_data
 
@@ -33,8 +34,11 @@ def navigate_project(project_number: str) -> dict:
 
     try:
         # Call the script as a subprocess - script is now in src directory
+        # Use absolute path resolution to avoid working directory issues
+        script_path = os.path.join(os.path.dirname(__file__), '..', 'src', 'find_project_path.py')
+        script_path = os.path.normpath(script_path)
         res = subprocess.run(
-            [sys.executable, "../src/find_project_path.py", project_number],
+            [sys.executable, script_path, project_number],
             capture_output=True, text=True, check=True
         )
         output = res.stdout.strip()

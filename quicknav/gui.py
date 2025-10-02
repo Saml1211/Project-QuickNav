@@ -21,6 +21,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 import os
 import sys
+import subprocess
 import threading
 import queue
 import json
@@ -908,9 +909,9 @@ class ProjectQuickNavGUI:
                 os.startfile(path)
             elif os.name == 'posix':  # macOS and Linux
                 if sys.platform == 'darwin':  # macOS
-                    os.system(f'open "{path}"')
+                    subprocess.run(['open', path], check=False)
                 else:  # Linux
-                    os.system(f'xdg-open "{path}"')
+                    subprocess.run(['xdg-open', path], check=False)
         except Exception as e:
             logger.exception("Failed to open folder")
             self._show_error(f"Failed to open folder: {e}")
@@ -940,9 +941,9 @@ class ProjectQuickNavGUI:
                 os.startfile(path)
             elif os.name == 'posix':  # macOS and Linux
                 if sys.platform == 'darwin':  # macOS
-                    os.system(f'open "{path}"')
+                    subprocess.run(['open', path], check=False)
                 else:  # Linux
-                    os.system(f'xdg-open "{path}"')
+                    subprocess.run(['xdg-open', path], check=False)
         except Exception as e:
             logger.exception("Failed to open file")
             self._show_error(f"Failed to open file: {e}")
