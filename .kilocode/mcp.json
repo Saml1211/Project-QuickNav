@@ -15,7 +15,8 @@
         "improved-tern-88G1Gw"
       ],
       "alwaysAllow": [
-        "web_search_exa"
+        "web_search_exa",
+        "get_code_context_exa"
       ]
     },
     "ref-tools-mcp": {
@@ -33,7 +34,8 @@
         "improved-tern-88G1Gw"
       ],
       "alwaysAllow": [
-        "ref_search_documentation"
+        "ref_search_documentation",
+        "ref_read_url"
       ]
     }
   }
