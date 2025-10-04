@@ -1,0 +1,7 @@
+{
+  "mcpServers": {
+    "Ref": {
+      "httpUrl": "https://api.ref.tools/mcp?apiKey=ref-6c1c3dbaf6c47cbe0d2d"
+    }
+  }
+}
