@@ -254,28 +254,46 @@ class ProjectQuickNavGUI:
 
         # Configure grid weights for responsive layout
         self.main_frame.columnconfigure(0, weight=1)
-        self.main_frame.rowconfigure(2, weight=1)  # Main content area
-        self.main_frame.rowconfigure(4, weight=1)  # Status area
+        self.main_frame.rowconfigure(2, weight=1)  # Actions & Filters frame
 
         # Create all UI sections
         logger.info("Initializing UI sections")
 
-        # Row 0 - Project Input
+        # Create Labelframe containers for logical grouping
+        project_frame = ttk.Labelframe(self.main_frame, text="Project")
+        project_frame.grid(row=0, column=0, sticky="ew", pady=(0, self.layout.get_consistent_spacing()))
+        project_frame.columnconfigure(0, weight=1)
+        self._add_tooltip(project_frame, "Enter project number and see recent projects")
+
+        nav_mode_frame = ttk.Labelframe(self.main_frame, text="Navigation Mode")
+        nav_mode_frame.grid(row=1, column=0, sticky="ew", pady=(0, self.layout.get_consistent_spacing()))
+        nav_mode_frame.columnconfigure(0, weight=1)
+        self._add_tooltip(nav_mode_frame, "Select whether to open a project folder or find a document")
+
+        actions_filters_frame = ttk.Labelframe(self.main_frame, text="Actions & Filters")
+        actions_filters_frame.grid(row=2, column=0, sticky="nsew", pady=(0, self.layout.get_consistent_spacing()))
+        actions_filters_frame.columnconfigure(0, weight=1)
+        actions_filters_frame.rowconfigure(0, weight=1)
+        self._add_tooltip(actions_filters_frame, "Perform actions and apply filters")
+
+        utilities_frame = ttk.Labelframe(self.main_frame, text="Utilities")
+        utilities_frame.grid(row=3, column=0, sticky="ew", pady=(0, self.layout.get_consistent_spacing()))
+        utilities_frame.columnconfigure(0, weight=1)
+        self._add_tooltip(utilities_frame, "Additional options and AI assistant")
+
+        # Row 0 - Project Input (inside Project frame)
         self.sections['project_input'] = ProjectInputSection(
-            self.main_frame, self.state, self.layout, self.settings, self._add_tooltip
+            project_frame, self.state, self.layout, self.settings, self._add_tooltip
         )
 
-        # Row 1 - Navigation Mode
+        # Row 1 - Navigation Mode (inside Navigation Mode frame)
         self.sections['navigation_mode'] = NavigationModeSection(
-            self.main_frame, self.state, self.layout, self._add_tooltip
+            nav_mode_frame, self.state, self.layout, self._add_tooltip
         )
 
-        # Row 2 - Main Content (Folder/Document modes)
-        self.main_content_frame = ttk.Frame(self.main_frame)
-        self.main_content_frame.grid(
-            row=2, column=0, sticky="ew",
-            pady=(0, self.layout.get_consistent_spacing() // 2)
-        )
+        # Row 2 - Main Content (Folder/Document modes) (inside Actions & Filters frame)
+        self.main_content_frame = ttk.Frame(actions_filters_frame)
+        self.main_content_frame.grid(row=0, column=0, sticky="nsew")
         self.main_content_frame.columnconfigure(0, weight=1)
 
         self.sections['folder_mode'] = FolderModeSection(
@@ -288,12 +306,15 @@ class ProjectQuickNavGUI:
         # Initially show folder mode
         self.sections['folder_mode'].show()
 
-        # Row 3 - Sidebar (Options and AI Assistant)
-        self.sidebar_frame = ttk.Frame(self.main_frame)
-        self.sidebar_frame.grid(
-            row=3, column=0, sticky="ew",
-            pady=(0, self.layout.get_consistent_spacing() // 2)
+        # Action Buttons (inside Actions & Filters frame)
+        self.sections['action_buttons'] = ActionButtonsSection(
+            actions_filters_frame, self.state, self.layout, self._add_tooltip
         )
+        self.sections['action_buttons'].frame.grid(row=1, column=0, sticky="ew", pady=(self.layout.get_consistent_spacing(), 0))
+
+        # Row 3 - Sidebar (Options and AI Assistant) (inside Utilities frame)
+        self.sidebar_frame = ttk.Frame(utilities_frame)
+        self.sidebar_frame.grid(row=0, column=0, sticky="ew")
         self.sidebar_frame.columnconfigure(0, weight=1)
         self.sidebar_frame.columnconfigure(1, weight=1)
 
@@ -309,11 +330,6 @@ class ProjectQuickNavGUI:
             self.main_frame, self.state, self.layout
         )
 
-        # Row 5 - Action Buttons
-        self.sections['action_buttons'] = ActionButtonsSection(
-            self.main_frame, self.state, self.layout, self._add_tooltip
-        )
-
         # Create menu bar
         self._create_menu_bar()
 
@@ -325,10 +341,8 @@ class ProjectQuickNavGUI:
         self.sections['navigation_mode'].set_on_mode_change(self._on_mode_change)
 
         # Action button callbacks
-        self.sections['action_buttons'].set_on_folder_navigation(self.execute_folder_navigation)
-        self.sections['action_buttons'].set_on_document_navigation(self.execute_document_navigation)
-        self.sections['action_buttons'].set_on_document_choose(self.execute_document_navigation)
-        self.sections['action_buttons'].set_on_final_navigation(self._execute_final_navigation)
+        self.sections['action_buttons'].set_on_action(self._execute_current_action)
+        self.sections['action_buttons'].set_on_choose(lambda: self.execute_document_navigation(choose_mode=True))
 
         # AI assistant callbacks
         self.sections['ai_assistant'].set_on_toggle_ai(self.toggle_ai)
@@ -432,35 +446,20 @@ class ProjectQuickNavGUI:
         selected_folder = self.state.get_selected_folder()
 
         # Show progress
-        self.sections['status'].show_progress("Searching for project...")
+        self.sections['status'].show_progress(f"Navigating to project '{project_input}'...")
 
-        # Capture current values to avoid thread safety issues
+        # Capture current values
         debug_mode_value = self.state.is_debug_mode()
         training_mode_value = self.state.is_training_mode()
 
-        # Execute in background
-        def task():
-            try:
-                result = self.controller.navigate_to_project(
-                    project_input=project_input,
-                    selected_folder=selected_folder,
-                    debug_mode=debug_mode_value,
-                    training_data=training_mode_value
-                )
-                self.result_queue.put({
-                    'type': 'project_navigation',
-                    'success': True,
-                    'data': result
-                })
-            except Exception as e:
-                logger.exception("Project navigation failed")
-                self.result_queue.put({
-                    'type': 'project_navigation',
-                    'success': False,
-                    'error': str(e)
-                })
-
-        threading.Thread(target=task, daemon=True).start()
+        # Execute in background via controller
+        self.controller.navigate_to_project_async(
+            project_input=project_input,
+            selected_folder=selected_folder,
+            debug_mode=debug_mode_value,
+            training_data=training_mode_value,
+            result_queue=self.result_queue
+        )
 
     def execute_document_navigation(self, choose_mode: bool = False):
         """Execute document navigation."""
@@ -492,41 +491,33 @@ class ProjectQuickNavGUI:
             return
 
         # Show progress
-        self.sections['status'].show_progress("Searching for documents...")
+        self.sections['status'].show_progress(f"Searching for {doc_type_text} in project '{project_input}'...")
 
         # Get filters
         filters = self.state.get_document_filters()
         debug_mode_value = self.state.is_debug_mode()
         training_mode_value = self.state.is_training_mode()
 
-        # Execute in background
-        def task():
-            try:
-                result = self.controller.search_documents(
-                    project_input=project_input,
-                    doc_type=doc_type_key,
-                    version_filter=filters['version_filter'],
-                    room_filter=filters['room_filter'],
-                    co_filter=filters['co_filter'],
-                    include_archive=filters['include_archive'],
-                    debug_mode=debug_mode_value,
-                    training_data=training_mode_value,
-                    choose_mode=choose_mode
-                )
-                self.result_queue.put({
-                    'type': 'document_navigation',
-                    'success': True,
-                    'data': result
-                })
-            except Exception as e:
-                logger.exception("Document navigation failed")
-                self.result_queue.put({
-                    'type': 'document_navigation',
-                    'success': False,
-                    'error': str(e)
-                })
+        # Execute in background via controller
+        self.controller.navigate_to_document_async(
+            project_input=project_input,
+            doc_type=doc_type_key,
+            version_filter=filters['version_filter'],
+            room_filter=filters['room_filter'],
+            co_filter=filters['co_filter'],
+            include_archive=filters['include_archive'],
+            debug_mode=debug_mode_value,
+            training_data=training_mode_value,
+            choose_mode=choose_mode,
+            result_queue=self.result_queue
+        )
 
-        threading.Thread(target=task, daemon=True).start()
+    def _reset_ui(self):
+        """Reset the UI after a successful action."""
+        self.sections['project_input'].project_entry.delete(0, tk.END)
+        self.sections['document_mode'].doc_type_combo.set(self.state.doc_type.get())
+        self.state.set_status_text("Ready")
+        self.sections['action_buttons'].disable_action_button()
 
     def _execute_final_navigation(self):
         """Execute navigation to the last search result."""
@@ -568,20 +559,26 @@ class ProjectQuickNavGUI:
         if mode == "folder":
             self.sections['folder_mode'].show()
             self.sections['document_mode'].hide()
-            self.sections['action_buttons'].update_button_visibility("folder")
+            self.sections['action_buttons'].set_action_button_text("Open Folder")
+            self.sections['action_buttons'].hide_choose_button()
             self.state.set_status_text("Folder mode - Select a project subfolder to open")
         else:  # document mode
             self.sections['folder_mode'].hide()
             self.sections['document_mode'].show()
-            self.sections['action_buttons'].update_button_visibility("document")
+            self.sections['action_buttons'].set_action_button_text("Find Document")
+            self.sections['action_buttons'].set_choose_button_text("Choose From List")
+            self.sections['action_buttons'].show_choose_button()
             self.state.set_status_text("Document mode - Find specific documents by type and filters")
 
         self.root.update_idletasks()
 
     def _on_project_input_change(self, event=None):
         """Handle project input change."""
-        # Validation is handled by EventCoordinator
-        pass
+        valid, _ = self.events.validate_inputs()
+        if valid:
+            self.sections['action_buttons'].enable_action_button()
+        else:
+            self.sections['action_buttons'].disable_action_button()
 
     def _on_window_configure(self, event):
         """Handle window configuration changes (resize, move)."""
@@ -635,7 +632,7 @@ class ProjectQuickNavGUI:
             elif task_type == 'document_navigation':
                 self._handle_document_result(data)
         else:
-            self._show_error(f"Operation failed: {error}")
+            self._show_error(f"Operation failed: {error}", error)
             self.state.set_status_text("Error occurred")
 
     def _handle_project_result(self, result: Dict[str, Any]):
@@ -645,10 +642,23 @@ class ProjectQuickNavGUI:
         folder = result.get('folder')
 
         if status == 'SUCCESS':
+            project_path = result.get('path')
+            project_folder = result.get('folder')
+            project_name = Path(project_path).name
+            project_number = project_name.split(' - ')[0]
+
+            self.settings.add_recent_project({
+                'path': project_path,
+                'project_number': project_number,
+                'project_name': project_name,
+                'folder': project_folder
+            })
+
             self.last_search_result = path
             self.last_search_type = "folder"
             self._open_folder_with_subfolder(path, folder)
             self.sections['project_input'].update_recent_projects()
+            self._reset_ui()
         elif status == 'SELECT':
             paths = result.get('paths', [])
             self._show_selection_dialog(paths, folder, "project")
@@ -662,13 +672,31 @@ class ProjectQuickNavGUI:
         path = result.get('path')
 
         if status == 'SUCCESS':
+            project_path = result.get('project_path')
+            if project_path:
+                project_name = Path(project_path).name
+                project_number = project_name.split(' - ')[0]
+
+                self.settings.add_recent_project({
+                    'path': project_path,
+                    'project_number': project_number,
+                    'project_name': project_name,
+                    'folder': ''
+                })
+
             self.last_search_result = path
             self.last_search_type = "file"
             self._open_file(path)
+            self.state.set_status_text(f"Successfully opened file: {path}")
             self.sections['project_input'].update_recent_projects()
+            self._reset_ui()
         elif status == 'SELECT':
             paths = result.get('paths', [])
-            self._show_search_dialog(paths, None)
+            if paths:
+                self._show_search_dialog(paths, None)
+                self.state.set_status_text("Multiple documents found. Please select one.")
+            else:
+                self.state.set_status_text("No documents found for the selected criteria.")
         elif status == 'ERROR':
             error_msg = result.get('message', 'Unknown error')
             self._show_error(error_msg)
@@ -697,8 +725,10 @@ class ProjectQuickNavGUI:
         full_path = Path(project_path) / subfolder
         if full_path.exists():
             self._open_folder(str(full_path))
+            self.state.set_status_text(f"Successfully opened folder: {full_path}")
         else:
             self._open_folder(project_path)
+            self.state.set_status_text(f"Successfully opened folder: {project_path}")
 
     def _open_file(self, path: str):
         """Open file with default application."""
@@ -732,10 +762,13 @@ class ProjectQuickNavGUI:
         if paths:
             self._open_file(paths[0])
 
-    def _show_error(self, message: str, suggestion: Optional[str] = None):
+    def _show_error(self, message: str, exception: Optional[Exception] = None):
         """Show error message."""
         messagebox.showerror("Error", message)
-        logger.error(message)
+        if exception:
+            logger.exception(message, exc_info=exception)
+        else:
+            logger.error(message)
 
     # Window Management
 
@@ -847,7 +880,7 @@ class ProjectQuickNavGUI:
         except ImportError:
             from gui_settings import SettingsDialog
 
-        dialog = SettingsDialog(self.root, self.settings, self.theme)
+        dialog = SettingsDialog(self.root, self.settings)
         dialog.show()
         # Apply any changed settings
         self._apply_theme()
@@ -913,7 +946,7 @@ Built with Python and Tkinter"""
         self.last_search_result = None
         self.last_search_type = None
         if 'action_buttons' in self.sections:
-            self.sections['action_buttons'].disable_navigate_button()
+            self.sections['action_buttons'].disable_action_button()
 
     def _copy_current_path(self):
         """Copy current path to clipboard."""
