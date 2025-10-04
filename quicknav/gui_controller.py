@@ -22,6 +22,9 @@ from typing import Dict, List, Optional, Any, Union
 from pathlib import Path
 import tempfile
 
+import queue
+import threading
+
 logger = logging.getLogger(__name__)
 
 
@@ -125,6 +128,52 @@ class GuiController:
                 'error': str(e)
             }
 
+    def navigate_to_project_async(self, project_input: str, selected_folder: str,
+                                debug_mode: bool, training_data: bool, result_queue: queue.Queue):
+        """Execute project navigation in a background thread."""
+        def task():
+            try:
+                result = self.navigate_to_project(
+                    project_input=project_input,
+                    selected_folder=selected_folder,
+                    debug_mode=debug_mode,
+                    training_data=training_data
+                )
+                result_queue.put({
+                    'type': 'project_navigation',
+                    'success': True,
+                    'data': result
+                })
+            except Exception as e:
+                logger.exception("Project navigation failed")
+                result_queue.put({
+                    'type': 'project_navigation',
+                    'success': False,
+                    'error': e
+                })
+
+        threading.Thread(target=task, daemon=True).start()
+
+    def search_documents(self, project_input: str, doc_type: str,
+                           version_filter: str = "Auto (Latest/Best)",
+                           room_filter: str = "", co_filter: str = "",
+                           include_archive: bool = False, choose_mode: bool = False,
+                           debug_mode: bool = False, training_data: bool = False) -> Dict[str, Any]:
+        """
+        Search for project documents. This is an alias for navigate_to_document.
+        """
+        return self.navigate_to_document(
+            project_input=project_input,
+            doc_type=doc_type,
+            version_filter=version_filter,
+            room_filter=room_filter,
+            co_filter=co_filter,
+            include_archive=include_archive,
+            choose_mode=choose_mode,
+            debug_mode=debug_mode,
+            training_data=training_data
+        )
+
     def navigate_to_document(self, project_input: str, doc_type: str,
                            version_filter: str = "Auto (Latest/Best)",
                            room_filter: str = "", co_filter: str = "",
@@ -170,6 +219,39 @@ class GuiController:
                 'status': 'ERROR',
                 'error': str(e)
             }
+
+    def navigate_to_document_async(self, project_input: str, doc_type: str,
+                                 version_filter: str, room_filter: str, co_filter: str,
+                                 include_archive: bool, choose_mode: bool,
+                                 debug_mode: bool, training_data: bool, result_queue: queue.Queue):
+        """Execute document navigation in a background thread."""
+        def task():
+            try:
+                result = self.navigate_to_document(
+                    project_input=project_input,
+                    doc_type=doc_type,
+                    version_filter=version_filter,
+                    room_filter=room_filter,
+                    co_filter=co_filter,
+                    include_archive=include_archive,
+                    choose_mode=choose_mode,
+                    debug_mode=debug_mode,
+                    training_data=training_data
+                )
+                result_queue.put({
+                    'type': 'document_navigation',
+                    'success': True,
+                    'data': result
+                })
+            except Exception as e:
+                logger.exception("Document navigation failed")
+                result_queue.put({
+                    'type': 'document_navigation',
+                    'success': False,
+                    'error': e
+                })
+
+        threading.Thread(target=task, daemon=True).start()
 
     def _navigate_project_direct(self, project_input: str, selected_folder: str,
                                debug_mode: bool, training_data: bool) -> Dict[str, Any]:
@@ -320,6 +402,9 @@ class GuiController:
                 co_filter=co_filter_int,
                 exclude_archive=not include_archive
             )
+
+            if result.get('status') == 'SUCCESS':
+                result['project_path'] = project_path
 
             return self._parse_document_result(result)
 

@@ -49,7 +49,7 @@ class FolderModeSection:
     def _create_ui(self):
         """Create the folder selection UI."""
         # Folder selection frame
-        self.frame = ttk.LabelFrame(self.parent, text="Select Subfolder")
+        self.frame = ttk.Frame(self.parent)
         # Note: Frame created but not gridded - will be shown by parent
 
         # Folder options with icons

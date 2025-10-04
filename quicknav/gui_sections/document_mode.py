@@ -54,7 +54,7 @@ class DocumentModeSection:
     def _create_ui(self):
         """Create the document mode UI."""
         # Document mode frame (initially hidden) within main content frame
-        self.frame = ttk.LabelFrame(self.parent, text="Document Type & Filters")
+        self.frame = ttk.Frame(self.parent)
         self.frame.columnconfigure(0, weight=1)
         self.frame.columnconfigure(1, weight=1)
 

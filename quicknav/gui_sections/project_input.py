@@ -67,9 +67,8 @@ class ProjectInputSection:
     def _create_ui(self):
         """Create the project input section UI."""
         # Project input frame with improved styling
-        self.frame = ttk.LabelFrame(self.parent, text="Project Input")
-        self.frame.grid(row=0, column=0, sticky="ew", pady=(0, self.layout.get_consistent_spacing() // 2))
-        self.frame.columnconfigure(0, weight=1)
+        self.frame = ttk.Frame(self.parent)
+        self.frame.pack(fill=tk.BOTH, expand=True)
 
         # Project entry with enhanced features and responsive styling
         entry_font_size = max(9, min(12, int(10 * self.layout.dpi_scale)))

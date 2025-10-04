@@ -51,7 +51,7 @@ class OptionsSection:
     def _create_ui(self):
         """Create the options section UI."""
         # Options frame
-        self.frame = ttk.LabelFrame(self.parent, text="Options")
+        self.frame = ttk.Frame(self.parent)
         self.frame.grid(
             row=0, column=0, sticky="ew",
             padx=(0, self.layout.get_consistent_spacing() // 2)

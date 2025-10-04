@@ -54,12 +54,8 @@ class NavigationModeSection:
     def _create_ui(self):
         """Create the navigation mode section UI."""
         # Navigation mode frame with improved styling
-        self.frame = ttk.LabelFrame(self.parent, text="Navigation Mode")
-        self.frame.grid(
-            row=1, column=0, sticky="ew",
-            pady=(0, self.layout.get_consistent_spacing() // 2)
-        )
-        self.frame.columnconfigure(0, weight=1)
+        self.frame = ttk.Frame(self.parent)
+        self.frame.pack(fill=tk.BOTH, expand=True)
 
         # Mode selection frame with improved spacing and grid layout
         mode_frame = ttk.Frame(self.frame)

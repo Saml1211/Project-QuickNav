@@ -57,7 +57,7 @@ class AIAssistantSection:
     def _create_ui(self):
         """Create the AI assistant section UI."""
         # AI Toolbar frame with improved styling
-        self.frame = ttk.LabelFrame(self.parent, text="AI Assistant")
+        self.frame = ttk.Frame(self.parent)
         self.frame.grid(
             row=0, column=1, sticky="ew",
             padx=(self.layout.get_consistent_spacing() // 2, 0)
