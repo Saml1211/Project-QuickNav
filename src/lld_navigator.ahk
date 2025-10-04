@@ -99,6 +99,231 @@ CalcMinClient(panelCtrls, padX := 20, padY := 20, extraCtrls := "") {
     ; Return minimum width and height with padding
     return [maxX + padX, maxY + padY]
 }
+
+; Theme system functions
+InitializeThemeSystem() {
+    global currentTheme, themeState
+
+    ; Define theme configurations
+    themeState["light"] := Map(
+        "background", "FFFFFF",
+        "text", "000000",
+        "button_face", "F0F0F0",
+        "button_text", "000000",
+        "groupbox_bg", "F8F8F8",
+        "edit_bg", "FFFFFF",
+        "edit_text", "000000",
+        "combo_bg", "FFFFFF",
+        "combo_text", "000000"
+    )
+
+    themeState["dark"] := Map(
+        "background", "2D2D30",
+        "text", "FFFFFF",
+        "button_face", "3C3C3C",
+        "button_text", "FFFFFF",
+        "groupbox_bg", "252526",
+        "edit_bg", "3C3C3C",
+        "edit_text", "FFFFFF",
+        "combo_bg", "3C3C3C",
+        "combo_text", "FFFFFF"
+    )
+
+    ; Load saved theme preference
+    LoadThemePreference()
+}
+
+LoadThemePreference() {
+    global currentTheme, configPath
+
+    try {
+        if (FileExist(configPath)) {
+            jsonContent := FileRead(configPath, "UTF-8")
+            if (RegExMatch(jsonContent, '"theme"\s*:\s*"([^"]*)"', &match)) {
+                savedTheme := match[1]
+                if (savedTheme = "light" || savedTheme = "dark") {
+                    currentTheme := savedTheme
+                }
+            }
+        }
+    } catch {
+        ; Use default light theme
+    }
+}
+
+SaveThemePreference() {
+    global currentTheme, configPath
+
+    try {
+        ; Load existing settings
+        settings := Map()
+        if (FileExist(configPath)) {
+            jsonContent := FileRead(configPath, "UTF-8")
+            settings := ParseSimpleJson(jsonContent)
+        }
+
+        ; Update theme setting
+        settings["theme"] := currentTheme
+
+        ; Save back to file
+        SaveSettingsToFile(settings)
+    } catch as e {
+        ; Ignore theme save errors
+    }
+}
+
+toggle_theme() {
+    global currentTheme, themeApplying
+
+    ; Prevent concurrent theme applications
+    if (themeApplying) {
+        return
+    }
+
+    themeApplying := true
+
+    try {
+        ; Toggle between light and dark themes
+        currentTheme := (currentTheme = "light") ? "dark" : "light"
+
+        ; Apply theme with synchronization
+        _apply_theme()
+
+        ; Save preference
+        SaveThemePreference()
+
+    } catch as e {
+        ; Revert on error
+        currentTheme := (currentTheme = "light") ? "dark" : "light"
+    } finally {
+        themeApplying := false
+    }
+}
+
+_apply_theme() {
+    global mainGui, currentTheme, themeState, themeApplying
+
+    if (!IsObject(mainGui) || !themeState.Has(currentTheme)) {
+        return
+    }
+
+    theme := themeState[currentTheme]
+
+    ; Disable redraw during theme application
+    SetRedraw(mainGui.Hwnd, false)
+
+    try {
+        ; Apply theme to main window background
+        if (IsObject(mainGui)) {
+            ; Use Windows API to set window background color
+            DllCall("SetClassLongPtr", "ptr", mainGui.Hwnd, "int", -10, "ptr", "0x" . theme["background"])
+        }
+
+        ; Apply theme to all controls
+        _apply_theme_to_controls(mainGui, theme)
+
+        ; Force immediate redraw
+        SetRedraw(mainGui.Hwnd, true)
+
+    } catch as e {
+        ; Re-enable redraw on error
+        SetRedraw(mainGui.Hwnd, true)
+        throw e
+    }
+}
+
+_apply_theme_to_controls(parentCtrl, theme) {
+    ; Apply theme to individual controls based on their type
+    if (IsObject(parentCtrl)) {
+        ; Apply to direct child controls
+        for ctrl in parentCtrl {
+            if (IsObject(ctrl) && ctrl.HasProp("Hwnd")) {
+                _apply_control_theme(ctrl, theme)
+            }
+        }
+    }
+}
+
+_apply_control_theme(ctrl, theme) {
+    try {
+        hwnd := ctrl.Hwnd
+
+        switch ctrl.__Class {
+            case "Gui.Button":
+                ; Set button colors
+                DllCall("SendMessage", "ptr", hwnd, "uint", 0x2001, "ptr", 0, "ptr", "0x" . theme["button_face"])
+                DllCall("SetWindowTextColor", "ptr", hwnd, "uint", "0x" . theme["button_text"])
+
+            case "Gui.Edit":
+                ; Set edit control colors
+                DllCall("SendMessage", "ptr", hwnd, "uint", 0x2001, "ptr", 0, "ptr", "0x" . theme["edit_bg"])
+                DllCall("SetWindowTextColor", "ptr", hwnd, "uint", "0x" . theme["edit_text"])
+
+            case "Gui.Text":
+                ; Set text color
+                DllCall("SetWindowTextColor", "ptr", hwnd, "uint", "0x" . theme["text"])
+
+            case "Gui.ComboBox":
+                ; Set combo box colors
+                DllCall("SendMessage", "ptr", hwnd, "uint", 0x2001, "ptr", 0, "ptr", "0x" . theme["combo_bg"])
+                DllCall("SetWindowTextColor", "ptr", hwnd, "uint", "0x" . theme["combo_text"])
+
+            case "Gui.GroupBox":
+                ; Set group box background
+                DllCall("SendMessage", "ptr", hwnd, "uint", 0x2001, "ptr", 0, "ptr", "0x" . theme["groupbox_bg"])
+
+            case "Gui.Checkbox":
+                ; Set checkbox text color
+                DllCall("SetWindowTextColor", "ptr", hwnd, "uint", "0x" . theme["text"])
+        }
+    } catch {
+        ; Ignore individual control theme errors
+    }
+}
+
+_on_mode_change(newMode) {
+    global currentTheme, themeApplying
+
+    ; Wait for any ongoing theme application to complete
+    if (themeApplying) {
+        ; Schedule theme refresh after current application completes
+        SetTimer(() => _refresh_theme_for_mode(newMode), -100)
+        return
+    }
+
+    ; Apply theme refresh for the new mode
+    _refresh_theme_for_mode(newMode)
+}
+
+_refresh_theme_for_mode(mode) {
+    global mainGui, currentTheme, themeState
+
+    if (!IsObject(mainGui) || !themeState.Has(currentTheme)) {
+        return
+    }
+
+    ; Ensure theme is properly applied for current mode
+    SetRedraw(mainGui.Hwnd, false)
+
+    try {
+        theme := themeState[currentTheme]
+
+        ; Re-apply theme to currently visible controls only
+        if (mode = "folder") {
+            _apply_theme_to_controls(mainGui.folderCtrls, theme)
+            _apply_theme_to_controls([mainGui.optionsGroup, mainGui.statusText, mainGui.openBtn], theme)
+        } else if (mode = "document") {
+            _apply_theme_to_controls(mainGui.docCtrls, theme)
+            _apply_theme_to_controls([mainGui.optionsGroup, mainGui.statusText, mainGui.findBtn, mainGui.chooseBtn], theme)
+        }
+
+        ; Force redraw
+        SetRedraw(mainGui.Hwnd, true)
+
+    } catch {
+        SetRedraw(mainGui.Hwnd, true)
+    }
+}
 try DllCall("User32\SetProcessDpiAwarenessContext", "ptr", -4)  ; DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2
 #SingleInstance Force
 
@@ -107,6 +332,9 @@ global mainGui, settingsGui
 global currentProject := ""
 global dpiScale := A_ScreenDPI / 96.0
 global configPath := A_AppData . "\QuickNav\settings.json"
+global currentTheme := "light"
+global themeApplying := false
+global themeState := Map()
 
 ; Document types configuration
 docTypes := Map(
@@ -130,12 +358,17 @@ InitializeApp()
 
 ; Hotkey assignment
 ^!q:: ToggleGui()
+^!t:: toggle_theme()  ; Ctrl+Alt+T to toggle theme
 
 ; Main functions
 InitializeApp() {
+    InitializeThemeSystem()
     CreateMainGui()
     LoadSettings()
     AddSystemTrayMenu()
+
+    ; Apply initial theme
+    _apply_theme()
 
     ; Show GUI on startup
     ShowMainGui()
@@ -362,6 +595,9 @@ SwitchMode(mode) {
         mainGui.MinSize := minSize[1] "x" minSize[2]
         UpdateStatus("Folder mode - Select a project subfolder to open")
     }
+
+    ; Coordinate theme refresh with mode change
+    _on_mode_change(mode)
 }
 
 ValidateInputs() {
@@ -1244,6 +1480,16 @@ ShowSettingsDialog() {
 
         currentY += btnHeight + Round(20 * dpiScale)
 
+        ; Theme section
+        themeGroup := settingsGui.Add("GroupBox", Format("x{} y{} w{} h{}",
+            margin, currentY, Round(470 * dpiScale), Round(60 * dpiScale)), "Theme")
+        themeY := currentY + Round(20 * dpiScale)
+        currentThemeText := settingsGui.Add("Text", Format("x{} y{} w{} h{}",
+            margin + Round(10 * dpiScale), themeY, Round(200 * dpiScale), Round(24 * dpiScale)), "Current: " . currentTheme . " theme")
+        themeToggleBtn := settingsGui.Add("Button", Format("x{} y{} w{} h{} vThemeToggleBtn",
+            margin + Round(300 * dpiScale), themeY, Round(150 * dpiScale), Round(30 * dpiScale)), "Toggle Theme")
+        currentY += Round(70 * dpiScale)
+
         ; Save/Cancel buttons
         saveBtn := settingsGui.Add("Button", Format("x{} y{} w{} h{} Default vSaveBtn",
             margin + Round(470 * dpiScale) - btnWidth - btnSpacing - btnWidth, currentY, btnWidth, btnHeight), "Save")
@@ -1254,6 +1500,7 @@ ShowSettingsDialog() {
         addBtn.OnEvent("Click", (*) => AddRootPath(settingsGui, rootList))
         editBtn.OnEvent("Click", (*) => EditRootPath(settingsGui, rootList))
         removeBtn.OnEvent("Click", (*) => RemoveRootPath(settingsGui, rootList))
+        themeToggleBtn.OnEvent("Click", (*) => SettingsThemeToggle(settingsGui, currentThemeText))
         saveBtn.OnEvent("Click", (*) => SaveSettingsDialog(settingsGui, rootList))
         cancelBtn.OnEvent("Click", (*) => settingsGui.Destroy())
         settingsGui.OnEvent("Close", (*) => settingsGui.Destroy())
@@ -1520,22 +1767,30 @@ ToggleGui() {
 AddSystemTrayMenu() {
     ; Clear default menu and add custom items
     A_TrayMenu.Delete()
-    
+
     A_TrayMenu.Add("Show/Hide QuickNav", (*) => ToggleGui())
+    A_TrayMenu.Add("Toggle Theme (Ctrl+Alt+T)", (*) => toggle_theme())
     A_TrayMenu.Add("Settings", (*) => ShowSettingsDialog())
     A_TrayMenu.Add()
     A_TrayMenu.Add("Exit", (*) => ExitApp())
-    
+
     A_TrayMenu.Default := "Show/Hide QuickNav"
     TraySetIcon("shell32.dll", 44)
 }
 
 ; Main GUI resize handler: dynamic layout, spacing, and bounds checks
 MainGuiSize(thisGui, MinMax, Width, Height) {
-    global mainGui, dpiScale
+    global mainGui, dpiScale, themeApplying
     if (MinMax = -1)
         return
-    
+
+    ; Wait for theme application to complete before resizing
+    if (themeApplying) {
+        ; Schedule resize after theme application completes
+        SetTimer(() => MainGuiSize(thisGui, MinMax, Width, Height), -50)
+        return
+    }
+
     ; Disable redraw to prevent flicker during layout adjustment
     SetRedraw(thisGui.Hwnd, false)
     try {
@@ -1698,6 +1953,21 @@ MainGuiSize(thisGui, MinMax, Width, Height) {
         ; Re-enable redraw after layout adjustment
         SetRedraw(thisGui.Hwnd, true)
     }
+}
+
+SettingsThemeToggle(settingsGui, themeTextCtrl) {
+    global currentTheme
+
+    ; Toggle theme
+    toggle_theme()
+
+    ; Update the theme display text in settings dialog
+    if (IsObject(themeTextCtrl)) {
+        themeTextCtrl.Text := "Current: " . currentTheme . " theme"
+    }
+
+    ; Update status to show theme change
+    UpdateStatus("Theme switched to " . currentTheme . " mode")
 }
 
 ; Helper to raise errors in a linter-friendly way

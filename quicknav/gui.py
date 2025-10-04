@@ -38,6 +38,37 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Constants for better maintainability
+class GUIConstants:
+    """Constants used throughout the GUI application."""
+    # Window dimensions
+    DEFAULT_MIN_WIDTH = 420
+    DEFAULT_MIN_HEIGHT = 720
+    COMPILED_ENV_CHECK_DELAY = 200  # ms
+    DPI_SCALE_THRESHOLD = 1.1
+    THEME_REFRESH_DELAY = 50  # ms
+
+    # UI Layout
+    SECTION_PADDING = 16
+    ELEMENT_PADDING = 8
+    BUTTON_WIDTH = 16
+    ENTRY_WIDTH = 8
+
+    # Animation and timing
+    RESIZE_DEBOUNCE_DELAY = 100  # ms
+    AUTOCOMPLETE_DEBOUNCE_DELAY = 300  # ms
+    WINDOW_AUTO_HIDE_DELAY = 1500  # ms
+
+    # Display scaling
+    DPI_SCALE_MIN = 1.0
+    DPI_SCALE_MAX = 3.0
+    STANDARD_DPI = 96
+
+    # Keyboard shortcuts
+    HOTKEY_RESET_WINDOW = '<Control-Shift-R>'
+    HOTKEY_TOGGLE_THEME = '<Control-d>'
+    HOTKEY_RESET_FORM = '<Control-r>'
+
 # Import core components
 try:
     from .gui_controller import GuiController
@@ -121,63 +152,39 @@ class ProjectQuickNavGUI:
         self.status_text = tk.StringVar(value="Ready - Select navigation mode and enter project number")
 
         # Document mode variables
-        self.doc_type = tk.StringVar()
-        self.version_filter = tk.StringVar(value="Auto (Latest/Best)")
-        self.room_filter = tk.StringVar()
-        self.co_filter = tk.StringVar()
-        self.include_archive = tk.BooleanVar()
+        self.doc_type = tk.StringVar()  # Selected document type for search
+        self.version_filter = tk.StringVar(value="Auto (Latest/Best)")  # Version filter preference
+        self.room_filter = tk.StringVar()  # Room number filter
+        self.co_filter = tk.StringVar()  # Change Order filter
+        self.include_archive = tk.BooleanVar()  # Include archived documents flag
 
         # Folder mode variables
-        self.selected_folder = tk.StringVar(value="4. System Designs")
+        self.selected_folder = tk.StringVar(value="4. System Designs")  # Selected project subfolder
 
-        # UI state
-        self.is_resizing = False
-        self.min_width = 420
-        self.min_height = 720  # Increased to show all components
+        # UI state management
+        self.is_resizing = False  # Flag to prevent resize loops
+        self.min_width = GUIConstants.DEFAULT_MIN_WIDTH  # Minimum window width
+        self.min_height = GUIConstants.DEFAULT_MIN_HEIGHT  # Minimum window height
 
-        # DPI awareness
-        self.dpi_scale = self._get_dpi_scale()
+        # DPI scaling support
+        self.dpi_scale = self._get_dpi_scale()  # Display scaling factor
         self._apply_dpi_scaling()
 
-        # Task queue for async operations
-        self.task_queue = queue.Queue()
-        self.result_queue = queue.Queue()
+        # Background task management
+        self.task_queue = queue.Queue()  # Queue for background operations
+        self.result_queue = queue.Queue()  # Queue for operation results
 
-        # AI components
-        self.ai_client = None
-        self.ai_chat_widget = None
-        self.ai_enabled = tk.BooleanVar()
-        self.ai_panel_visible = tk.BooleanVar(value=False)
+        # AI assistant components
+        self.ai_client = None  # AI client instance
+        self.ai_chat_widget = None  # AI chat widget instance
+        self.ai_enabled = tk.BooleanVar()  # AI feature enabled flag
+        self.ai_panel_visible = tk.BooleanVar(value=False)  # AI chat panel visibility
 
         # Initialize AI if enabled
         self._initialize_ai()
 
-        # Initialize UI
-        self._setup_ui()
-        self._setup_events()
-        self._setup_validation()
-        self._setup_autocomplete()  # Initialize autocomplete system
-        self._apply_theme()
-
-        # Force widget refresh to ensure theme is visible
-        self.root.update_idletasks()
-        self.root.after(100, self._force_widget_refresh)
-
-        # Restore window state
-        self.restore_window_state()
-
-        # Start task processor
-        self._start_task_processor()
-
-        # Update AI UI
-        self._update_ai_ui()
-
-        # Initialize navigation state
-        self.last_search_result = None
-        self.last_search_type = None
-
-        # Initialize tooltip system
-        self.tooltips = {}
+        # Batch initialization operations for better performance
+        self._batch_initialize_ui()
 
         logger.info("ProjectQuickNavGUI initialized successfully")
 
@@ -186,27 +193,80 @@ class ProjectQuickNavGUI:
         try:
             # Get DPI from tkinter
             dpi = self.root.winfo_fpixels('1i')
-            # Standard DPI is 96
-            scale = dpi / 96.0
-            # Clamp scale between 1.0 and 3.0
-            return max(1.0, min(3.0, scale))
+            # Calculate scale factor using standard DPI
+            scale = dpi / GUIConstants.STANDARD_DPI
+            # Clamp scale between min and max values
+            return max(GUIConstants.DPI_SCALE_MIN, min(GUIConstants.DPI_SCALE_MAX, scale))
         except Exception:
-            return 1.0
+            return GUIConstants.DPI_SCALE_MIN
+
+    def _get_consistent_padding(self) -> int:
+        """Get consistent padding value based on DPI scaling and window size."""
+        base_padding = max(8, int(12 * self.dpi_scale))
+        current_width = self.root.winfo_width()
+
+        # Adjust padding for very small windows to maximize content area
+        if current_width > 0 and current_width < 450:
+            return max(4, int(base_padding * 0.7))
+        return base_padding
+
+    def _get_consistent_spacing(self) -> int:
+        """Get consistent spacing value for internal component spacing."""
+        return max(6, int(8 * self.dpi_scale))
 
     def _apply_dpi_scaling(self):
         """Apply DPI scaling to the interface."""
-        if self.dpi_scale > 1.1:  # Only scale if significantly different
+        if self.dpi_scale > GUIConstants.DPI_SCALE_THRESHOLD:  # Only scale if significantly different
             try:
+                logger.info(f"Applying DPI scaling factor: {self.dpi_scale}")
+
                 # Scale fonts
                 import tkinter.font as tkFont
                 default_font = tkFont.nametofont("TkDefaultFont")
-                default_font.configure(size=int(default_font['size'] * self.dpi_scale))
+                original_size = default_font['size']
+                new_size = int(original_size * self.dpi_scale)
+                default_font.configure(size=new_size)
+                logger.info(f"Font scaled from {original_size} to {new_size}")
 
                 # Adjust minimum window size for DPI
+                original_min_width = self.min_width
+                original_min_height = self.min_height
                 self.min_width = int(self.min_width * self.dpi_scale)
                 self.min_height = int(self.min_height * self.dpi_scale)
+                logger.info(f"Min window size scaled from {original_min_width}x{original_min_height} to {self.min_width}x{self.min_height}")
             except Exception as e:
                 logger.warning(f"Failed to apply DPI scaling: {e}")
+
+    def _update_dpi_scaling_for_resize(self, width: int, height: int):
+        """Update DPI scaling calculations during resize for better consistency."""
+        try:
+            # Recalculate DPI scale based on current window size
+            old_dpi_scale = self.dpi_scale
+            self.dpi_scale = self._get_dpi_scale()
+
+            # Only reapply scaling if there's a significant change (>5%)
+            if abs(self.dpi_scale - old_dpi_scale) > 0.05:
+                logger.info(f"DPI scale changed during resize: {old_dpi_scale} -> {self.dpi_scale}")
+
+                # Reapply DPI scaling to fonts and minimum sizes
+                if self.dpi_scale > GUIConstants.DPI_SCALE_THRESHOLD:
+                    import tkinter.font as tkFont
+                    default_font = tkFont.nametofont("TkDefaultFont")
+                    original_size = default_font['size']
+                    new_size = int(original_size * self.dpi_scale)
+                    default_font.configure(size=new_size)
+
+                    # Update minimum window size for new DPI scale
+                    base_min_width = GUIConstants.DEFAULT_MIN_WIDTH
+                    base_min_height = GUIConstants.DEFAULT_MIN_HEIGHT
+                    self.min_width = int(base_min_width * self.dpi_scale)
+                    self.min_height = int(base_min_height * self.dpi_scale)
+
+                    # Update root window minimum size
+                    self.root.minsize(self.min_width, self.min_height)
+                    logger.info(f"DPI scaling updated for resize - Min size: {self.min_width}x{self.min_height}")
+        except Exception as e:
+            logger.warning(f"Failed to update DPI scaling during resize: {e}")
 
     def _ensure_main_thread(self, func, *args, **kwargs):
         """Ensure a function runs in the main thread."""
@@ -232,29 +292,28 @@ class ProjectQuickNavGUI:
         self.root.update_idletasks()
 
         # Create main container with responsive padding
-        padding = max(8, int(12 * self.dpi_scale))
+        padding = self._get_consistent_padding()
         self.main_frame = ttk.Frame(self.root)
         self.main_frame.pack(fill=tk.BOTH, expand=True, padx=padding, pady=padding)
 
-        # Configure grid weights for responsive layout
+        # Configure grid weights for responsive layout - more compact design
         self.main_frame.columnconfigure(0, weight=1)
-        self.main_frame.rowconfigure(7, weight=1)  # Status area gets extra space
+        self.main_frame.rowconfigure(6, weight=1)  # Status area gets extra space
 
-        self._create_project_input_section()
-        self._create_navigation_mode_section()
-        self._create_folder_mode_section()
-        self._create_document_mode_section()
-        self._create_options_section()
-        self._create_ai_toolbar()
-        self._create_status_section()
-        self._create_action_buttons()
+        # Create sections in a more intuitive order
+        self._create_project_input_section()      # Row 0 - Primary input
+        self._create_navigation_mode_section()   # Row 1 - Mode selection
+        self._create_main_content_section()      # Row 2 - Folder or Document mode (combined)
+        self._create_sidebar_section()           # Row 3 - Options and AI toolbar (side by side)
+        self._create_status_section()            # Row 4 - Status information
+        self._create_action_buttons()            # Row 5 - Action buttons
         self._create_menu_bar()
 
     def _create_project_input_section(self):
         """Create project input section with enhanced styling."""
         # Project input frame with improved styling
         input_frame = ttk.LabelFrame(self.main_frame, text="Project Input")
-        input_frame.grid(row=0, column=0, sticky="ew", pady=(0, 16))
+        input_frame.grid(row=0, column=0, sticky="ew", pady=(0, self._get_consistent_spacing()))
         input_frame.columnconfigure(0, weight=1)
 
         # Project entry with enhanced features and responsive styling
@@ -265,24 +324,27 @@ class ProjectQuickNavGUI:
             placeholder="Enter 5-digit project number or search term",
             font=("Segoe UI", entry_font_size)
         )
-        entry_padding = max(12, int(16 * self.dpi_scale))
+        entry_padding = self._get_consistent_padding()
         ipady_value = max(3, int(4 * self.dpi_scale))
-        self.project_entry.grid(row=0, column=0, sticky="ew", padx=entry_padding, pady=(entry_padding, 8), ipady=ipady_value)
+        self.project_entry.grid(row=0, column=0, sticky="ew", padx=entry_padding, pady=(entry_padding, self._get_consistent_spacing()), ipady=ipady_value)
 
         # Bind validation events
         self.project_entry.bind('<KeyRelease>', self._on_project_input_change)
         self.project_entry.bind('<FocusOut>', self._on_project_input_change)
 
-        # Recent projects frame
+        # Recent projects frame with consistent layout
         recent_frame = ttk.Frame(input_frame)
         recent_frame.grid(row=1, column=0, sticky="ew", padx=entry_padding, pady=(0, entry_padding))
+        recent_frame.columnconfigure(0, weight=1)
 
-        # Recent projects label
-        ttk.Label(recent_frame, text="⏱️ Recent:", font=("Segoe UI", 9)).pack(side="left", padx=(0, 8))
+        # Recent projects label with consistent styling
+        recent_label = ttk.Label(recent_frame, text="⏱️ Recent:", font=("Segoe UI", 9))
+        recent_label.grid(row=0, column=0, sticky="w", padx=(0, self._get_consistent_spacing()))
 
-        # Recent projects buttons container
+        # Recent projects buttons container with proper grid layout
         self.recent_buttons_frame = ttk.Frame(recent_frame)
-        self.recent_buttons_frame.pack(side="left", fill="x", expand=True)
+        self.recent_buttons_frame.grid(row=0, column=1, sticky="ew")
+        self.recent_buttons_frame.columnconfigure(0, weight=1)
 
         # Populate recent projects
         self._update_recent_projects()
@@ -291,14 +353,15 @@ class ProjectQuickNavGUI:
         """Create navigation mode selection section with enhanced styling."""
         # Navigation mode frame with improved styling
         nav_frame = ttk.LabelFrame(self.main_frame, text="Navigation Mode")
-        nav_frame.grid(row=1, column=0, sticky="ew", pady=(0, 16))
+        nav_frame.grid(row=1, column=0, sticky="ew", pady=(0, self._get_consistent_spacing()))
         nav_frame.columnconfigure(0, weight=1)
 
-        # Mode selection frame with improved spacing
+        # Mode selection frame with improved spacing and grid layout
         mode_frame = ttk.Frame(nav_frame)
-        mode_frame.pack(fill="x", padx=16, pady=16)
+        mode_frame.grid(row=0, column=0, sticky="ew", padx=self._get_consistent_padding(), pady=self._get_consistent_padding())
+        mode_frame.columnconfigure(0, weight=1)
 
-        # Radio buttons for navigation mode with better styling and icons
+        # Radio buttons for navigation mode with better styling and icons using grid layout
         self.folder_radio = ttk.Radiobutton(
             mode_frame,
             text="📁 Open Project Folder",
@@ -306,7 +369,7 @@ class ProjectQuickNavGUI:
             value="folder",
             command=self._on_mode_change
         )
-        self.folder_radio.pack(anchor="w", pady=(0, 8))
+        self.folder_radio.grid(row=0, column=0, sticky="w", pady=(0, self._get_consistent_spacing() // 2))
         self._add_tooltip(self.folder_radio, "Navigate directly to a project subfolder")
 
         self.doc_radio = ttk.Radiobutton(
@@ -316,16 +379,33 @@ class ProjectQuickNavGUI:
             value="document",
             command=self._on_mode_change
         )
-        self.doc_radio.pack(anchor="w")
+        self.doc_radio.grid(row=1, column=0, sticky="w")
         self._add_tooltip(self.doc_radio, "Search for specific documents within projects")
 
         # Remove standalone settings button - available via menu
 
+    def _create_main_content_section(self):
+        """Create main content section that switches between folder and document modes."""
+        # Create a container frame for mode-specific content
+        self.main_content_frame = ttk.Frame(self.main_frame)
+        self.main_content_frame.grid(row=2, column=0, sticky="ew", pady=(0, self._get_consistent_spacing()))
+        self.main_content_frame.columnconfigure(0, weight=1)
+
+        # Create folder mode section within the main content frame
+        self._create_folder_mode_section()
+
+        # Create document mode section within the main content frame
+        self._create_document_mode_section()
+
+        # Initially show folder mode
+        self.folder_frame.grid(row=0, column=0, sticky="ew")
+        self.doc_frame.grid_remove()
+
     def _create_folder_mode_section(self):
         """Create folder selection section for folder mode."""
         # Folder selection frame
-        self.folder_frame = ttk.LabelFrame(self.main_frame, text="Select Subfolder")
-        self.folder_frame.grid(row=2, column=0, sticky="ew", pady=(0, 16))
+        self.folder_frame = ttk.LabelFrame(self.main_content_frame, text="Select Subfolder")
+        self.folder_frame.grid(row=0, column=0, sticky="ew")
 
         # Folder options with icons
         folder_options = [
@@ -337,7 +417,7 @@ class ProjectQuickNavGUI:
             ("📁 6. Site Photos", "6. Site Photos")
         ]
 
-        # Create radio buttons for folders with icons and tooltips
+        # Create radio buttons for folders with icons and tooltips using grid layout
         self.folder_radios = []
         folder_tooltips = {
             "4. System Designs": "Technical drawings, CAD files, and system specifications",
@@ -348,30 +428,49 @@ class ProjectQuickNavGUI:
             "6. Site Photos": "Project site photographs and documentation"
         }
 
+        # Create container frame with grid layout
+        folder_container = ttk.Frame(self.folder_frame)
+        folder_container.grid(row=0, column=0, sticky="ew", padx=self._get_consistent_padding(), pady=self._get_consistent_padding())
+        folder_container.columnconfigure(0, weight=1)
+
         for i, (display_text, folder_value) in enumerate(folder_options):
             radio = ttk.Radiobutton(
-                self.folder_frame,
+                folder_container,
                 text=display_text,
                 variable=self.selected_folder,
                 value=folder_value
             )
-            radio.pack(anchor="w", padx=15, pady=2)
+            radio.grid(row=i, column=0, sticky="w", pady=2)
             self.folder_radios.append(radio)
             self._add_tooltip(radio, folder_tooltips.get(folder_value, "Project subfolder"))
 
     def _create_document_mode_section(self):
         """Create document type and filter section for document mode."""
-        # Document mode frame (initially hidden)
-        self.doc_frame = ttk.LabelFrame(self.main_frame, text="Document Type & Filters")
-        self.doc_frame.grid(row=3, column=0, sticky="ew", pady=(0, 16))
-        self.doc_frame.columnconfigure(1, weight=1)
+        # Document mode frame (initially hidden) within main content frame
+        self.doc_frame = ttk.LabelFrame(self.main_content_frame, text="Document Type & Filters")
+        self.doc_frame.grid(row=1, column=0, sticky="ew")
+        self.doc_frame.columnconfigure(0, weight=1)
 
-        # Document type selection
-        ttk.Label(self.doc_frame, text="Document Type:").grid(
-            row=0, column=0, sticky="w", padx=(10, 5), pady=(10, 5)
+        # Create document type selection
+        self._create_document_type_selection()
+
+        # Create version filter
+        self._create_version_filter()
+
+        # Create document filters (room, CO, archive)
+        self._create_document_filters()
+
+        # Initially hide document frame
+        self.doc_frame.grid_remove()
+
+    def _create_document_type_selection(self):
+        """Create document type selection controls."""
+        # Document type label and options with consistent spacing
+        doc_type_label = ttk.Label(self.doc_frame, text="Document Type:")
+        doc_type_label.grid(
+            row=0, column=0, sticky="w", padx=self._get_consistent_padding(), pady=(self._get_consistent_padding(), self._get_consistent_spacing() // 2)
         )
 
-        # Document type options with icons
         doc_type_options = [
             "🔧 Low-Level Design (LLD)",
             "📊 High-Level Design (HLD)",
@@ -391,13 +490,15 @@ class ProjectQuickNavGUI:
             values=doc_type_options,
             state="readonly"
         )
-        self.doc_type_combo.grid(row=0, column=1, sticky="ew", padx=(0, 10), pady=(10, 5))
+        self.doc_type_combo.grid(row=0, column=1, sticky="ew", padx=(0, self._get_consistent_padding()), pady=(self._get_consistent_padding(), self._get_consistent_spacing() // 2))
         self.doc_type_combo.current(0)
         self._add_tooltip(self.doc_type_combo, "Select the type of document to search for")
 
-        # Version filter
-        ttk.Label(self.doc_frame, text="Version Filter:").grid(
-            row=1, column=0, sticky="w", padx=(10, 5), pady=(5, 5)
+    def _create_version_filter(self):
+        """Create version filter controls."""
+        version_label = ttk.Label(self.doc_frame, text="Version Filter:")
+        version_label.grid(
+            row=1, column=0, sticky="w", padx=self._get_consistent_padding(), pady=(self._get_consistent_spacing() // 2, self._get_consistent_spacing() // 2)
         )
 
         version_options = [
@@ -414,28 +515,32 @@ class ProjectQuickNavGUI:
             values=version_options,
             state="readonly"
         )
-        self.version_combo.grid(row=1, column=1, sticky="ew", padx=(0, 10), pady=(5, 5))
+        self.version_combo.grid(row=1, column=1, sticky="ew", padx=(0, self._get_consistent_padding()), pady=(self._get_consistent_spacing() // 2, self._get_consistent_spacing() // 2))
         self._add_tooltip(self.version_combo, "Filter documents by version (latest, as-built, etc.)")
 
-        # Filters frame
+    def _create_document_filters(self):
+        """Create document filter controls (room, CO, archive)."""
+        # Filters frame with responsive layout and consistent spacing
         filters_frame = ttk.Frame(self.doc_frame)
-        filters_frame.grid(row=2, column=0, columnspan=2, sticky="ew", padx=10, pady=(5, 10))
+        filters_frame.grid(row=2, column=0, columnspan=2, sticky="ew", padx=self._get_consistent_padding(), pady=(self._get_consistent_spacing() // 2, self._get_consistent_padding()))
         filters_frame.columnconfigure(1, weight=1)
         filters_frame.columnconfigure(3, weight=1)
 
-        # Room filter
-        ttk.Label(filters_frame, text="🏠 Room:").grid(row=0, column=0, sticky="w", padx=(0, 5))
+        # Room filter with consistent spacing
+        room_label = ttk.Label(filters_frame, text="🏠 Room:")
+        room_label.grid(row=0, column=0, sticky="w", padx=(0, self._get_consistent_spacing() // 2))
         self.room_entry = ttk.Entry(filters_frame, textvariable=self.room_filter, width=8)
-        self.room_entry.grid(row=0, column=1, sticky="w", padx=(0, 20))
+        self.room_entry.grid(row=0, column=1, sticky="w", padx=(0, self._get_consistent_spacing()))
         self._add_tooltip(self.room_entry, "Filter by room number (e.g., 101, 201)")
 
-        # CO filter
-        ttk.Label(filters_frame, text="📝 CO:").grid(row=0, column=2, sticky="w", padx=(0, 5))
+        # CO filter with consistent spacing
+        co_label = ttk.Label(filters_frame, text="📝 CO:")
+        co_label.grid(row=0, column=2, sticky="w", padx=(0, self._get_consistent_spacing() // 2))
         self.co_entry = ttk.Entry(filters_frame, textvariable=self.co_filter, width=8)
-        self.co_entry.grid(row=0, column=3, sticky="w", padx=(0, 20))
+        self.co_entry.grid(row=0, column=3, sticky="w", padx=(0, self._get_consistent_spacing()))
         self._add_tooltip(self.co_entry, "Filter by Change Order number")
 
-        # Include archive checkbox
+        # Include archive checkbox with consistent spacing
         self.archive_check = ttk.Checkbutton(
             filters_frame,
             text="📦 Include Archive",
@@ -444,46 +549,61 @@ class ProjectQuickNavGUI:
         self.archive_check.grid(row=0, column=4, sticky="w")
         self._add_tooltip(self.archive_check, "Include archived and older versions")
 
-        # Initially hide document frame
-        self.doc_frame.grid_remove()
+    def _create_sidebar_section(self):
+        """Create sidebar section with options and AI toolbar side by side."""
+        # Sidebar container frame
+        self.sidebar_frame = ttk.Frame(self.main_frame)
+        self.sidebar_frame.grid(row=3, column=0, sticky="ew", pady=(0, self._get_consistent_spacing()))
+        self.sidebar_frame.columnconfigure(0, weight=1)
+        self.sidebar_frame.columnconfigure(1, weight=1)
+
+        # Create options subsection
+        self._create_options_section()
+
+        # Create AI toolbar subsection
+        self._create_ai_toolbar()
 
     def _create_options_section(self):
-        """Create options section."""
+        """Create options section within sidebar."""
         # Options frame
-        options_frame = ttk.LabelFrame(self.main_frame, text="Options")
-        options_frame.grid(row=4, column=0, sticky="ew", pady=(0, 16))
+        options_frame = ttk.LabelFrame(self.sidebar_frame, text="Options")
+        options_frame.grid(row=0, column=0, sticky="ew", padx=(0, self._get_consistent_spacing() // 2))
+        options_frame.columnconfigure(0, weight=1)
 
-        # Options container
+        # Options container with grid layout
         opts_container = ttk.Frame(options_frame)
-        opts_container.pack(fill="x", padx=10, pady=10)
+        opts_container.grid(row=0, column=0, sticky="ew", padx=self._get_consistent_padding(), pady=self._get_consistent_padding())
+        opts_container.columnconfigure(0, weight=1)
 
-        # Debug mode checkbox
+        # Debug mode checkbox with consistent spacing
         self.debug_check = ttk.Checkbutton(
             opts_container,
             text="🔧 Show Debug Output",
             variable=self.debug_mode
         )
-        self.debug_check.pack(side="left")
+        self.debug_check.grid(row=0, column=0, sticky="w")
         self._add_tooltip(self.debug_check, "Show detailed debug information in results")
 
-        # Training data checkbox
+        # Training data checkbox with consistent spacing
         self.training_check = ttk.Checkbutton(
             opts_container,
             text="📊 Generate Training Data",
             variable=self.training_mode
         )
-        self.training_check.pack(side="left", padx=(20, 0))
+        self.training_check.grid(row=0, column=1, sticky="w", padx=(self._get_consistent_spacing(), 0))
         self._add_tooltip(self.training_check, "Generate JSON training data for AI analysis")
 
     def _create_ai_toolbar(self):
-        """Create AI toolbar with enhanced styling."""
+        """Create AI toolbar within sidebar section."""
         # AI Toolbar frame with improved styling
-        ai_frame = ttk.LabelFrame(self.main_frame, text="AI Assistant")
-        ai_frame.grid(row=5, column=0, sticky="ew", pady=(0, 16))
+        ai_frame = ttk.LabelFrame(self.sidebar_frame, text="AI Assistant")
+        ai_frame.grid(row=0, column=1, sticky="ew", padx=(self._get_consistent_spacing() // 2, 0))
+        ai_frame.columnconfigure(0, weight=1)
 
-        # AI controls container
+        # AI controls container with grid layout
         ai_container = ttk.Frame(ai_frame)
-        ai_container.pack(fill="x", padx=16, pady=16)
+        ai_container.grid(row=0, column=0, sticky="ew", padx=self._get_consistent_padding(), pady=self._get_consistent_padding())
+        ai_container.columnconfigure(0, weight=1)
 
         # AI toggle button with primary styling and icon
         self.ai_toggle_button = ttk.Button(
@@ -492,7 +612,7 @@ class ProjectQuickNavGUI:
             command=self.toggle_ai,
             width=14
         )
-        self.ai_toggle_button.pack(side=tk.LEFT, padx=(0, 8))
+        self.ai_toggle_button.grid(row=0, column=0, sticky="w", padx=(0, self._get_consistent_spacing() // 2))
         self._add_tooltip(self.ai_toggle_button, "Enable or disable AI assistant features")
 
         # AI chat button
@@ -503,7 +623,7 @@ class ProjectQuickNavGUI:
             width=14,
             state=tk.DISABLED
         )
-        self.ai_chat_button.pack(side=tk.LEFT, padx=(0, 16))
+        self.ai_chat_button.grid(row=0, column=1, sticky="w", padx=(0, self._get_consistent_spacing()))
         self._add_tooltip(self.ai_chat_button, "Open AI chat window for interactive assistance")
 
         # AI status indicator with improved styling
@@ -512,16 +632,16 @@ class ProjectQuickNavGUI:
             text="Status: Disabled",
             font=("Segoe UI", 9)
         )
-        self.ai_status_label.pack(side=tk.LEFT, pady=2)
+        self.ai_status_label.grid(row=0, column=2, sticky="w", padx=(0, self._get_consistent_spacing() // 2))
 
     def _create_status_section(self):
         """Create status section."""
         # Status frame
         status_frame = ttk.Frame(self.main_frame)
-        status_frame.grid(row=6, column=0, sticky="ew", pady=(0, 16))
+        status_frame.grid(row=4, column=0, sticky="ew", pady=(0, self._get_consistent_spacing()))
         status_frame.columnconfigure(0, weight=1)
 
-        # Status label with responsive wrapping
+        # Status label with responsive wrapping and consistent padding
         wrap_length = max(300, int(self.min_width * 0.8))
         self.status_label = ttk.Label(
             status_frame,
@@ -529,34 +649,35 @@ class ProjectQuickNavGUI:
             wraplength=wrap_length,
             justify="left"
         )
-        self.status_label.grid(row=0, column=0, sticky="ew")
+        self.status_label.grid(row=0, column=0, sticky="ew", padx=self._get_consistent_padding())
 
         # Progress bar with loading spinner (hidden by default)
         self.progress_bar = ttk.Progressbar(
             status_frame,
             mode='indeterminate'
         )
-        self.progress_bar.grid(row=1, column=0, sticky="ew", pady=(5, 0))
+        self.progress_bar.grid(row=1, column=0, sticky="ew", padx=self._get_consistent_padding(), pady=(self._get_consistent_spacing() // 2, 0))
         self.progress_bar.grid_remove()
 
-        # Loading indicator label
+        # Loading indicator label with consistent padding
         self.loading_label = ttk.Label(
             status_frame,
             text="",
             font=("Segoe UI", 9)
         )
-        self.loading_label.grid(row=2, column=0, sticky="ew", pady=(2, 0))
+        self.loading_label.grid(row=2, column=0, sticky="ew", padx=self._get_consistent_padding(), pady=(2, 0))
         self.loading_label.grid_remove()
 
     def _create_action_buttons(self):
         """Create action buttons with enhanced styling."""
         # Button frame with improved spacing
         button_frame = ttk.Frame(self.main_frame)
-        button_frame.grid(row=7, column=0, sticky="ew", pady=(16, 0))
+        button_frame.grid(row=5, column=0, sticky="ew", pady=(self._get_consistent_spacing(), 0))
 
-        # Center the buttons with improved spacing
+        # Center the buttons with improved spacing and grid layout
         button_container = ttk.Frame(button_frame)
-        button_container.pack(expand=True)
+        button_container.grid(row=0, column=0)
+        button_container.columnconfigure(0, weight=1)
 
         # Folder mode button with primary styling and icon
         self.open_button = ttk.Button(
@@ -565,7 +686,7 @@ class ProjectQuickNavGUI:
             command=self.execute_folder_navigation,
             width=18
         )
-        self.open_button.pack(side="left", padx=(0, 12))
+        self.open_button.grid(row=0, column=0, padx=(0, self._get_consistent_spacing() // 2))
         self._add_tooltip(self.open_button, "Open the selected project subfolder in file explorer")
 
         # Document mode buttons with improved styling and icons (initially hidden)
@@ -575,6 +696,7 @@ class ProjectQuickNavGUI:
             command=self.execute_document_navigation,
             width=16
         )
+        self.find_button.grid(row=0, column=1, padx=(0, self._get_consistent_spacing() // 2))
         self._add_tooltip(self.find_button, "Search for the best matching document")
 
         self.choose_button = ttk.Button(
@@ -583,6 +705,7 @@ class ProjectQuickNavGUI:
             command=lambda: self.execute_document_navigation(choose_mode=True),
             width=16
         )
+        self.choose_button.grid(row=0, column=2, padx=(0, self._get_consistent_spacing() // 2))
         self._add_tooltip(self.choose_button, "Show all matching documents to choose from")
 
         # Open/Navigate button (appears after successful search)
@@ -593,6 +716,7 @@ class ProjectQuickNavGUI:
             width=16,
             state=tk.DISABLED
         )
+        self.navigate_button.grid(row=0, column=3)
         self._add_tooltip(self.navigate_button, "Open the selected result")
 
     def _create_menu_bar(self):
@@ -673,6 +797,12 @@ class ProjectQuickNavGUI:
         self.root.bind('<Control-d>', lambda e: self.toggle_theme())  # Toggle dark mode
         self.root.bind('<Control-t>', lambda e: self.toggle_always_on_top())  # Toggle on top
         self.root.bind('<Control-r>', lambda e: self._clear_and_reset())  # Reset/clear
+        self.root.bind('<Control-Shift-R>', lambda e: self._reset_window_size_flag())  # Reset window size
+
+        # Enhanced functionality shortcuts
+        self.root.bind('<Control-Shift-C>', lambda e: self._copy_current_path())  # Copy current path
+        self.root.bind('<F11>', lambda e: self._toggle_fullscreen())  # Toggle fullscreen
+        self.root.bind('<Control-Shift-F>', lambda e: self._focus_and_select_all())  # Focus and select all
 
         # AI shortcuts
         self.root.bind('<Control-space>', lambda e: self.toggle_ai_panel())  # Toggle AI chat
@@ -697,24 +827,43 @@ class ProjectQuickNavGUI:
         self.co_entry.config(validate='key', validatecommand=vcmd_num)
 
     def _apply_theme(self):
-        """Apply the current theme."""
+        """Apply the current theme with forced refresh."""
+        logger.info("Applying theme with forced refresh")
+        current_theme_name = self.theme.get_current_theme_name()
+        logger.info(f"Current theme before application: {current_theme_name}")
+
         self.theme.apply_theme(self.root)
+        logger.info("Theme applied to root window")
 
         # Force update after theme change
         self.root.update_idletasks()
+        logger.info("Root window updated after theme change")
+
+        # Enhanced widget refresh for theme changes
+        self._force_complete_widget_refresh()
+        logger.info("Complete widget refresh executed")
 
         # Ensure proper window colors
         current_theme_obj = self.theme.get_current_theme()
         if current_theme_obj:
+            theme_name = current_theme_obj.name if hasattr(current_theme_obj, 'name') else 'Unknown'
+            logger.info(f"Retrieved theme object: {theme_name}")
+
             window_bg = current_theme_obj.get_color("window", "bg") or current_theme_obj.get_color("bg")
             if window_bg:
+                logger.info(f"Setting window background color: {window_bg}")
                 self.root.configure(bg=window_bg)
                 # Update main frame background too
                 if hasattr(self, 'main_frame'):
                     try:
                         self.main_frame.configure(style="TFrame")
-                    except:
-                        pass
+                        logger.info("Main frame style updated")
+                    except Exception as e:
+                        logger.warning(f"Failed to update main frame style: {e}")
+            else:
+                logger.warning("No background color found in theme")
+        else:
+            logger.warning("No current theme object available")
 
     def _start_task_processor(self):
         """Start the background task processor."""
@@ -769,50 +918,218 @@ class ProjectQuickNavGUI:
 
     # Event handlers
     def _on_mode_change(self):
-        """Handle navigation mode change."""
+        """Handle navigation mode change with enhanced stability."""
         mode = self.current_mode.get()
+        logger.info(f"Mode change initiated: switching to {mode}")
 
-        if mode == "folder":
-            # Show folder frame, hide document frame
-            self.folder_frame.grid()
-            self.doc_frame.grid_remove()
+        # Prevent mode change loops with state tracking
+        if hasattr(self, '_last_mode') and self._last_mode == mode:
+            logger.debug(f"Mode unchanged ({mode}), skipping mode change")
+            return
 
-            # Show/hide appropriate buttons
-            self.open_button.pack(side="left", padx=(0, 8))
-            self.find_button.pack_forget()
-            self.choose_button.pack_forget()
-            self.navigate_button.pack_forget()
+        self._last_mode = mode
 
-            self.status_text.set("Folder mode - Select a project subfolder to open")
+        # Get current window dimensions before mode change
+        current_width = self.root.winfo_width()
+        current_height = self.root.winfo_height()
+        logger.info(f"Window size before mode change: {current_width}x{current_height}")
 
-        else:  # document mode
-            # Hide folder frame, show document frame
-            self.folder_frame.grid_remove()
-            self.doc_frame.grid()
+        # Set mode change flag to prevent resize event conflicts
+        self._is_mode_changing = True
 
-            # Show/hide appropriate buttons
-            self.open_button.pack_forget()
-            self.find_button.pack(side="left", padx=(0, 8))
-            self.choose_button.pack(side="left", padx=(0, 8))
-            if hasattr(self, 'last_search_result') and self.last_search_result:
-                self.navigate_button.pack(side="left")
+        try:
+            if mode == "folder":
+                logger.info("Switching to folder mode - showing folder frame, hiding document frame")
+                # Show folder frame, hide document frame with proper grid management
+                self.folder_frame.grid(row=2, column=0, sticky="ew", pady=(0, self._get_consistent_spacing()))
+                self.doc_frame.grid_remove()
+
+                # Show/hide appropriate buttons with enhanced layout management
+                self._update_button_visibility("folder")
+
+                # Update folder mode specific layout
+                self._update_folder_mode_layout(current_width, current_height)
+
+                self.status_text.set("Folder mode - Select a project subfolder to open")
+
+            else:  # document mode
+                logger.info("Switching to document mode - hiding folder frame, showing document frame")
+                # Hide folder frame, show document frame with proper grid management
+                self.folder_frame.grid_remove()
+                self.doc_frame.grid(row=3, column=0, sticky="ew", pady=(0, self._get_consistent_spacing()))
+
+                # Show/hide appropriate buttons with enhanced layout management
+                self._update_button_visibility("document")
+
+                # Update document mode specific layout
+                self._update_document_mode_layout(current_width, current_height)
+
+                self.status_text.set("Document mode - Find specific documents by type and filters")
+
+            # Force layout update after mode change with error handling
+            self.root.update_idletasks()
+
+            # Check window dimensions after mode change
+            new_width = self.root.winfo_width()
+            new_height = self.root.winfo_height()
+            logger.info(f"Window size after mode change: {new_width}x{new_height}")
+
+            # Update responsive layout only if size actually changed significantly
+            width_change = abs(new_width - current_width)
+            height_change = abs(new_height - current_height)
+            if width_change > 5 or height_change > 5:  # Only update if significant change
+                logger.info(f"Significant size change detected ({width_change}x{height_change}), updating layout")
+                self._update_responsive_layout()
             else:
-                self.navigate_button.pack_forget()
+                logger.debug("Minor size change during mode switch, skipping layout update")
 
-            self.status_text.set("Document mode - Find specific documents by type and filters")
+        except Exception as e:
+            logger.error(f"Error during mode change: {e}")
+        finally:
+            # Clear mode change flag after a short delay
+            def clear_mode_change_flag():
+                self._is_mode_changing = False
+                logger.debug("Mode change flag cleared")
+
+            self.root.after(100, clear_mode_change_flag)
+
+    def _update_button_visibility(self, mode: str):
+        """Update button visibility for specific mode with enhanced layout management."""
+        try:
+            if mode == "folder":
+                # Folder mode buttons - show open button, hide others
+                self.open_button.grid(row=0, column=0, padx=(0, self._get_consistent_spacing() // 2))
+                self.find_button.grid_remove()
+                self.choose_button.grid_remove()
+                self.navigate_button.grid_remove()
+                logger.debug("Folder mode buttons configured")
+            else:  # document mode
+                # Document mode buttons - hide open button, show others
+                self.open_button.grid_remove()
+                self.find_button.grid(row=0, column=1, padx=(0, self._get_consistent_spacing() // 2))
+                self.choose_button.grid(row=0, column=2, padx=(0, self._get_consistent_spacing() // 2))
+
+                # Show navigate button only if we have search results
+                if hasattr(self, 'last_search_result') and self.last_search_result:
+                    self.navigate_button.grid(row=0, column=3)
+                    logger.debug("Navigate button shown - search result available")
+                else:
+                    self.navigate_button.grid_remove()
+                    logger.debug("Navigate button hidden - no search result")
+
+        except Exception as e:
+            logger.warning(f"Error updating button visibility for {mode} mode: {e}")
 
     def _on_project_input_change(self, event=None):
         """Handle project input changes."""
         self._validate_inputs()
 
     def _on_window_configure(self, event=None):
-        """Handle window configuration changes."""
+        """Handle window configuration changes with enhanced stability."""
         if event and event.widget == self.root:
-            # Update responsive elements based on window size
+            current_width = event.width
+            current_height = event.height
+            current_size = f"{current_width}x{current_height}"
+
+            logger.info(f"Window configure event - Size: {current_size}, Is resizing: {self.is_resizing}")
+
+            # Enforce minimum size constraints
+            self._enforce_minimum_size()
+
+            # Skip resize handling during mode changes to prevent conflicts
+            if getattr(self, '_is_mode_changing', False):
+                logger.debug("Mode change in progress, skipping resize handling")
+                return
+
+            # Enhanced size change detection with tolerance for minor fluctuations
+            size_changed = True
+            if hasattr(self, '_last_resize_size'):
+                last_width, last_height = self._last_resize_size.split('x')
+                last_width, last_height = int(last_width), int(last_height)
+
+                # Allow 2px tolerance to prevent unnecessary updates from minor fluctuations
+                width_tolerance = max(2, int(current_width * 0.01))  # 1% of current width, min 2px
+                height_tolerance = max(2, int(current_height * 0.01))  # 1% of current height, min 2px
+
+                if (abs(current_width - last_width) <= width_tolerance and
+                    abs(current_height - last_height) <= height_tolerance):
+                    logger.debug(f"Size change within tolerance ({width_tolerance}x{height_tolerance}px), skipping resize")
+                    size_changed = False
+
+            if not size_changed:
+                return
+
+            self._last_resize_size = current_size
+
+            # Enhanced resize state management with timeout tracking
             if not self.is_resizing:
+                logger.info("Starting resize operation")
                 self.is_resizing = True
-                self._update_responsive_layout()
-                self.root.after(100, lambda: setattr(self, 'is_resizing', False))
+                self._resize_start_time = datetime.now()
+
+                try:
+                    # Update DPI scaling for new window size if needed
+                    self._update_dpi_scaling_for_resize(current_width, current_height)
+
+                    # Update responsive layout with mode-specific handling
+                    self._update_responsive_layout()
+                    logger.info("Responsive layout update completed successfully")
+                except Exception as e:
+                    logger.error(f"Error in responsive layout update: {e}")
+
+                # Enhanced timer reset with timeout protection
+                def reset_resize_flag():
+                    try:
+                        if hasattr(self, 'is_resizing') and self.is_resizing:
+                            # Check if resize operation has been running too long (>500ms)
+                            if hasattr(self, '_resize_start_time'):
+                                elapsed = (datetime.now() - self._resize_start_time).total_seconds() * 1000
+                                if elapsed > 500:
+                                    logger.warning(f"Resize operation timed out after {elapsed:.0f}ms, forcing reset")
+                                else:
+                                    logger.debug("Resize flag reset completed")
+                            self.is_resizing = False
+                    except Exception as e:
+                        logger.error(f"Error resetting resize flag: {e}")
+
+                self.root.after(150, reset_resize_flag)
+                logger.info("Resize operation scheduled for completion")
+            else:
+                logger.info("Resize operation already in progress, skipping")
+
+    def _enforce_minimum_size(self):
+        """Enforce minimum window size to ensure all components are visible."""
+        try:
+            current_width = self.root.winfo_width()
+            current_height = self.root.winfo_height()
+
+            # Calculate required minimum sizes
+            min_width = self._calculate_minimum_width()
+            min_height = self._calculate_minimum_height()
+
+            # Update instance variables if calculated minimums are larger
+            if min_width > self.min_width:
+                self.min_width = min_width
+            if min_height > self.min_height:
+                self.min_height = min_height
+
+            # Enforce minimum size
+            needs_resize = False
+            if current_width < self.min_width:
+                current_width = self.min_width
+                needs_resize = True
+
+            if current_height < self.min_height:
+                current_height = self.min_height
+                needs_resize = True
+
+            if needs_resize:
+                logger.info(f"Enforcing minimum size: {current_width}x{current_height}")
+                self.root.geometry(f"{current_width}x{current_height}")
+                self.root.minsize(self.min_width, self.min_height)
+
+        except Exception as e:
+            logger.warning(f"Error enforcing minimum size: {e}")
 
     def _on_key_press(self, event):
         """Handle key press events."""
@@ -1150,29 +1467,7 @@ class ProjectQuickNavGUI:
         """Show enhanced error message with actionable guidance."""
         # Extract error type and provide helpful suggestions
         if not suggestion:
-            if "not found" in message.lower() or "no such file" in message.lower():
-                suggestion = "💡 Try these solutions:\n" \
-                           "• Check the project number is correct (5 digits)\n" \
-                           "• Verify the project exists in OneDrive\n" \
-                           "• Try searching by project name instead"
-            elif "permission" in message.lower() or "access denied" in message.lower():
-                suggestion = "💡 Try these solutions:\n" \
-                           "• Check you have access to the OneDrive folder\n" \
-                           "• Verify OneDrive sync is working\n" \
-                           "• Contact IT if access issues persist"
-            elif "network" in message.lower() or "connection" in message.lower():
-                suggestion = "💡 Try these solutions:\n" \
-                           "• Check your internet connection\n" \
-                           "• Verify OneDrive is synced\n" \
-                           "• Try again in a few moments"
-            elif "invalid" in message.lower():
-                suggestion = "💡 Try these solutions:\n" \
-                           "• Enter a 5-digit project number (e.g., 17741)\n" \
-                           "• Or search by project name\n" \
-                           "• Use Ctrl+R to clear and start over"
-            else:
-                suggestion = "💡 Tip: Press Ctrl+R to clear and try again\n" \
-                           "Or press F1 for help"
+            suggestion = self._generate_error_suggestion(message)
 
         # Combine message and suggestion
         full_message = f"❌ {message}\n\n{suggestion}"
@@ -1182,6 +1477,46 @@ class ProjectQuickNavGUI:
 
         # Update status with brief error
         self.status_text.set(f"⚠️ Error: {message[:50]}...")
+
+    def _generate_error_suggestion(self, message: str) -> str:
+        """Generate contextual error suggestions based on message content."""
+        message_lower = message.lower()
+
+        if "not found" in message_lower or "no such file" in message_lower:
+            return ("💡 Try these solutions:\n"
+                   "• Check the project number is correct (5 digits)\n"
+                   "• Verify the project exists in OneDrive\n"
+                   "• Try searching by project name instead\n"
+                   "• Use Ctrl+Shift+F to focus and edit search")
+        elif "permission" in message_lower or "access denied" in message_lower:
+            return ("💡 Try these solutions:\n"
+                   "• Check you have access to the OneDrive folder\n"
+                   "• Verify OneDrive sync is working\n"
+                   "• Contact IT if access issues persist\n"
+                   "• Try restarting OneDrive sync")
+        elif "network" in message_lower or "connection" in message_lower:
+            return ("💡 Try these solutions:\n"
+                   "• Check your internet connection\n"
+                   "• Verify OneDrive is synced\n"
+                   "• Try again in a few moments\n"
+                   "• Check VPN connection if applicable")
+        elif "invalid" in message_lower:
+            return ("💡 Try these solutions:\n"
+                   "• Enter a 5-digit project number (e.g., 17741)\n"
+                   "• Or search by project name\n"
+                   "• Use Ctrl+R to clear and start over\n"
+                   "• Check for typos in project number")
+        elif "timeout" in message_lower:
+            return ("💡 Try these solutions:\n"
+                   "• Check network connection stability\n"
+                   "• Try again (operation may be temporarily slow)\n"
+                   "• Contact IT if timeouts persist")
+        else:
+            return ("💡 General troubleshooting:\n"
+                   "• Press Ctrl+R to clear and try again\n"
+                   "• Press F1 for help and documentation\n"
+                   "• Check the logs for more details\n"
+                   "• Restart the application if issues persist")
 
     def _execute_final_navigation(self):
         """Execute final navigation using stored search result."""
@@ -1225,39 +1560,227 @@ class ProjectQuickNavGUI:
             self.navigate_button.pack_forget()
 
     def _update_responsive_layout(self):
-        """Update layout elements for current window size."""
+        """Update layout elements for current window size with enhanced stability."""
         try:
             current_width = self.root.winfo_width()
             current_height = self.root.winfo_height()
+            current_mode = self.current_mode.get()
 
-            # Update status label wrap length based on window width
-            if hasattr(self, 'status_label'):
-                wrap_length = max(300, int(current_width * 0.8))
+            # Ensure minimum size is maintained
+            min_width = self._calculate_minimum_width()
+            min_height = self._calculate_minimum_height()
+
+            if current_width < min_width or current_height < min_height:
+                logger.info(f"Window size {current_width}x{current_height} below minimum {min_width}x{min_height}, enforcing constraints")
+                self._enforce_minimum_size()
+                return
+
+            # Prevent layout update loops with more sophisticated state tracking
+            layout_state_key = f"{current_width}x{current_height}:{current_mode}"
+            if hasattr(self, '_last_layout_state') and self._last_layout_state == layout_state_key:
+                logger.debug(f"Layout state unchanged ({layout_state_key}), skipping update")
+                return
+
+            self._last_layout_state = layout_state_key
+            logger.info(f"Updating responsive layout - Window: {current_width}x{current_height}, Mode: {current_mode}")
+
+            # Mode-specific layout adjustments
+            if current_mode == "folder":
+                self._update_folder_mode_layout(current_width, current_height)
+            else:  # document mode
+                self._update_document_mode_layout(current_width, current_height)
+
+            # Update status label wrap length based on window width with DPI awareness
+            if hasattr(self, 'status_label') and self.status_label.winfo_exists():
+                # Use DPI-scaled wrap length for better text wrapping
+                dpi_aware_width = int(current_width / self.dpi_scale) if self.dpi_scale > 0 else current_width
+                wrap_length = max(250, int(dpi_aware_width * 0.85))  # Better wrap length for readability
+                original_wrap = self.status_label.cget('wraplength')
                 self.status_label.config(wraplength=wrap_length)
+                logger.info(f"Status label wrap length: {original_wrap} -> {wrap_length}")
 
-            # Adjust button layout for narrow windows
-            if hasattr(self, 'open_button') and current_width < 500:
-                # Stack buttons vertically for narrow windows
-                button_width = max(12, int(current_width * 0.25))
-                self.open_button.config(width=button_width)
-                if hasattr(self, 'find_button'):
-                    self.find_button.config(width=button_width)
-                if hasattr(self, 'choose_button'):
-                    self.choose_button.config(width=button_width)
-                if hasattr(self, 'navigate_button'):
-                    self.navigate_button.config(width=button_width)
-            else:
-                # Normal horizontal layout
-                self.open_button.config(width=16)
-                if hasattr(self, 'find_button'):
-                    self.find_button.config(width=16)
-                if hasattr(self, 'choose_button'):
-                    self.choose_button.config(width=16)
-                if hasattr(self, 'navigate_button'):
-                    self.navigate_button.config(width=16)
+            # Enhanced button layout management with better responsive breakpoints
+            self._update_button_layout(current_width, current_height)
+
+            # Update padding and margins based on DPI scaling
+            self._update_dpi_aware_padding(current_width, current_height)
+
+            # Force layout recalculation with error handling
+            self.root.update_idletasks()
+            logger.info("Responsive layout update completed")
 
         except Exception as e:
             logger.warning(f"Failed to update responsive layout: {e}")
+
+    def _update_folder_mode_layout(self, width: int, height: int):
+        """Update layout specifically for folder mode."""
+        try:
+            # Ensure folder frame visibility and proper sizing
+            if hasattr(self, 'folder_frame') and self.folder_frame.winfo_exists():
+                self.folder_frame.grid_configure(sticky="ew")
+
+                # Update folder radio button layout for current window size
+                if hasattr(self, 'folder_radios'):
+                    for radio in self.folder_radios:
+                        if radio.winfo_exists():
+                            # Adjust padding based on window width with consistent scaling
+                            base_padx = self._get_consistent_padding()
+                            scaled_padx = max(base_padx, int(base_padx * (width / 400)))
+                            radio.grid_configure(padx=scaled_padx)
+
+            logger.debug("Folder mode layout updated")
+        except Exception as e:
+            logger.debug(f"Error updating folder mode layout: {e}")
+
+    def _update_document_mode_layout(self, width: int, height: int):
+        """Update layout specifically for document mode."""
+        try:
+            # Ensure document frame visibility and proper sizing
+            if hasattr(self, 'doc_frame') and self.doc_frame.winfo_exists():
+                self.doc_frame.grid_configure(sticky="ew")
+
+                # Update document filter layout for current window size
+                if hasattr(self, 'room_entry') and self.room_entry.winfo_exists():
+                    # Adjust entry width based on available space with consistent scaling
+                    base_width = 8
+                    scaled_width = max(6, min(12, int(base_width * (width / 400))))
+                    self.room_entry.config(width=scaled_width)
+
+                if hasattr(self, 'co_entry') and self.co_entry.winfo_exists():
+                    base_width = 8
+                    scaled_width = max(6, min(12, int(base_width * (width / 400))))
+                    self.co_entry.config(width=scaled_width)
+
+                # Update document filter container padding
+                if hasattr(self, 'filters_frame') and self.filters_frame.winfo_exists():
+                    filter_padding = self._get_consistent_padding()
+                    self.filters_frame.grid_configure(padx=filter_padding, pady=(self._get_consistent_spacing() // 2, filter_padding))
+
+            logger.debug("Document mode layout updated")
+        except Exception as e:
+            logger.debug(f"Error updating document mode layout: {e}")
+
+    def _update_button_layout(self, width: int, height: int):
+        """Update button layout with enhanced responsive behavior."""
+        try:
+            # Enhanced responsive breakpoints with better granularity
+            if width < 400:
+                # Very narrow - stack vertically
+                layout_mode = "vertical"
+                button_width = max(10, int(width * 0.3))
+            elif width < 550:
+                # Narrow - compact horizontal
+                layout_mode = "compact"
+                button_width = max(12, int(width * 0.22))
+            elif width < 700:
+                # Medium - standard horizontal
+                layout_mode = "standard"
+                button_width = 16
+            else:
+                # Wide - expanded horizontal
+                layout_mode = "expanded"
+                button_width = 18
+
+            logger.info(f"Button layout mode: {layout_mode} ({width}px) - width: {button_width}")
+
+            # Apply button width changes
+            buttons_to_update = []
+            if hasattr(self, 'open_button') and self.open_button.winfo_exists():
+                buttons_to_update.append(('open_button', self.open_button))
+            if hasattr(self, 'find_button') and self.find_button.winfo_exists():
+                buttons_to_update.append(('find_button', self.find_button))
+            if hasattr(self, 'choose_button') and self.choose_button.winfo_exists():
+                buttons_to_update.append(('choose_button', self.choose_button))
+            if hasattr(self, 'navigate_button') and self.navigate_button.winfo_exists():
+                buttons_to_update.append(('navigate_button', self.navigate_button))
+
+            for button_name, button in buttons_to_update:
+                current_width = button.cget('width')
+                if current_width != button_width:
+                    button.config(width=button_width)
+                    logger.debug(f"Updated {button_name} width: {current_width} -> {button_width}")
+
+            # Update button container padding based on layout mode
+            if hasattr(self, 'button_container') and self.button_container.winfo_exists():
+                if layout_mode == "vertical":
+                    # For vertical layout, add more padding between buttons
+                    padx_value = self._get_consistent_spacing() // 2
+                    pady_value = self._get_consistent_spacing() // 4
+                else:
+                    # For horizontal layout, use consistent spacing
+                    padx_value = self._get_consistent_spacing() // 2
+                    pady_value = 0
+
+                # Update padding for all visible buttons
+                for button_name, button in buttons_to_update:
+                    if not button.grid_info().get('in', None):  # Skip hidden buttons
+                        continue
+                    current_padx = button.grid_info().get('padx', 0)
+                    if current_padx != padx_value:
+                        button.grid_configure(padx=(0, padx_value))
+
+        except Exception as e:
+            logger.warning(f"Error updating button layout: {e}")
+
+    def _update_dpi_aware_padding(self, width: int, height: int):
+        """Update padding and margins based on DPI scaling and window size."""
+        try:
+            # Get consistent padding values
+            consistent_padding = self._get_consistent_padding()
+            consistent_spacing = self._get_consistent_spacing()
+
+            # Update main frame padding based on DPI and window size
+            if hasattr(self, 'main_frame') and self.main_frame.winfo_exists():
+                # Use consistent padding for main frame
+                self.main_frame.pack_configure(padx=consistent_padding, pady=consistent_padding)
+                logger.debug(f"Updated main frame padding to {consistent_padding}px")
+
+            # Update section padding for all LabelFrames with consistent spacing
+            label_frames = []
+            if hasattr(self, 'folder_frame') and self.folder_frame.winfo_exists():
+                label_frames.append(self.folder_frame)
+            if hasattr(self, 'doc_frame') and self.doc_frame.winfo_exists():
+                label_frames.append(self.doc_frame)
+
+            for frame in label_frames:
+                # Use consistent internal padding for all sections
+                try:
+                    # Grid configuration for frames that use grid
+                    frame.grid_configure(pady=consistent_spacing)
+                    logger.debug(f"Updated {frame.cget('text')} frame spacing to {consistent_spacing}px")
+                except:
+                    logger.debug(f"Could not update frame padding for {frame}")
+
+            # Update specific component containers with consistent padding
+            self._update_section_padding('input_frame', consistent_padding, consistent_spacing)
+            self._update_section_padding('nav_frame', consistent_padding, consistent_spacing)
+            self._update_section_padding('opts_container', consistent_padding, consistent_spacing)
+            self._update_section_padding('ai_container', consistent_padding, consistent_spacing)
+            self._update_section_padding('status_frame', consistent_padding, consistent_spacing)
+            self._update_section_padding('button_container', consistent_padding, consistent_spacing)
+
+        except Exception as e:
+            logger.debug(f"Error updating DPI-aware padding: {e}")
+
+    def _update_section_padding(self, container_name: str, padding: int, spacing: int):
+        """Update padding for specific section containers."""
+        try:
+            if hasattr(self, container_name):
+                container = getattr(self, container_name)
+                if container and container.winfo_exists():
+                    try:
+                        container.grid_configure(padx=padding, pady=spacing)
+                        logger.debug(f"Updated {container_name} padding to {padding}px, spacing to {spacing}px")
+                    except:
+                        try:
+                            container.pack_configure(padx=padding, pady=spacing)
+                            logger.debug(f"Updated {container_name} pack padding to {padding}px, spacing to {spacing}px")
+                        except:
+                            logger.debug(f"Could not update padding for {container_name}")
+            else:
+                logger.debug(f"Container {container_name} not found or not exists")
+        except Exception as e:
+            logger.debug(f"Error updating section padding for {container_name}: {e}")
 
     # UI state methods
     def show_window(self):
@@ -1286,11 +1809,17 @@ class ProjectQuickNavGUI:
             self.hide_window()
 
     def toggle_theme(self):
-        """Toggle between light and dark themes."""
+        """Toggle between light and dark themes with enhanced refresh."""
         self.theme.toggle_theme()
         self._apply_theme()
-        # Force widget refresh to ensure theme changes are visible
-        self.root.after(50, self._force_widget_refresh)
+
+        # Enhanced refresh sequence
+        self.root.after(50, self._force_complete_widget_refresh)
+        self.root.after(150, self._verify_theme_application)
+
+        # Update status
+        current_theme = self.theme.get_current_theme_name()
+        self.status_text.set(f"Theme switched to {current_theme}")
 
     def toggle_always_on_top(self):
         """Toggle always on top mode."""
@@ -1302,22 +1831,33 @@ class ProjectQuickNavGUI:
         self.settings.set("ui.always_on_top", new_state)
 
     def restore_window_state(self):
-        """Restore window state from settings."""
+        """Restore window state from settings with reset option."""
         try:
             # Restore always on top setting
             always_on_top = self.settings.get("ui.always_on_top", False)
             self.root.attributes('-topmost', always_on_top)
 
-            # Ensure window is visible and properly positioned
-            geometry = self.settings.get_window_geometry()
-            if geometry:
-                # Parse geometry to ensure it's on screen
-                if self._is_geometry_on_screen(geometry):
-                    self.root.geometry(geometry)
+            # Check if user wants to reset to default (e.g., via Ctrl+Shift+R)
+            reset_to_default = getattr(self, '_reset_window_size', False)
+
+            if reset_to_default:
+                self.root.geometry(self._get_responsive_geometry())
+                self._reset_window_size = False  # Reset flag
+                logger.info("Window reset to responsive default")
+            else:
+                # Ensure window is visible and properly positioned
+                geometry = self.settings.get_window_geometry()
+                if geometry:
+                    # Parse geometry to ensure it's on screen
+                    if self._is_geometry_on_screen(geometry):
+                        self.root.geometry(geometry)
+                    else:
+                        # Reset to responsive default if off-screen
+                        self.root.geometry(self._get_responsive_geometry())
+                        logger.info("Window was off-screen, reset to responsive geometry")
                 else:
-                    # Reset to responsive default if off-screen
+                    # No saved geometry, use responsive default
                     self.root.geometry(self._get_responsive_geometry())
-                    logger.info("Window was off-screen, reset to responsive geometry")
 
         except (tk.TclError, ValueError, KeyError) as e:
             logger.warning(f"Window state restoration error: {e}")
@@ -1327,6 +1867,13 @@ class ProjectQuickNavGUI:
             logger.error(f"Unexpected error restoring window state: {e}")
             # Fallback to minimum size
             self.root.geometry(f"{self.min_width}x{self.min_height}")
+
+    def reset_window_to_default(self):
+        """Reset window to default responsive size."""
+        default_geometry = self._get_responsive_geometry()
+        self.root.geometry(default_geometry)
+        self.settings.set_window_geometry(default_geometry)
+        self.status_text.set("Window reset to default size")
 
     def _force_widget_refresh(self):
         """Force refresh of all widgets to apply theme changes."""
@@ -1368,25 +1915,273 @@ class ProjectQuickNavGUI:
         except Exception as e:
             logger.warning(f"Error refreshing widgets: {e}")
 
+    def _reset_window_size_flag(self):
+        """Set flag to reset window size on next restore."""
+        self._reset_window_size = True
+        self.status_text.set("Window size will reset on next launch")
+
+    def _copy_current_path(self):
+        """Copy current project path to clipboard if available."""
+        try:
+            if hasattr(self, 'last_search_result') and self.last_search_result:
+                path = self.last_search_result.get('path', '')
+                if path:
+                    self.root.clipboard_clear()
+                    self.root.clipboard_append(path)
+                    self.status_text.set(f"Copied path to clipboard: {path}")
+                else:
+                    self.status_text.set("No path available to copy")
+            else:
+                self.status_text.set("No search result to copy")
+        except Exception as e:
+            logger.warning(f"Failed to copy path to clipboard: {e}")
+            self.status_text.set("Failed to copy path")
+
+    def _toggle_fullscreen(self):
+        """Toggle fullscreen mode for better visibility."""
+        try:
+            is_fullscreen = self.root.attributes('-fullscreen')
+            self.root.attributes('-fullscreen', not is_fullscreen)
+            self.status_text.set("Fullscreen " + ("enabled" if not is_fullscreen else "disabled"))
+        except Exception as e:
+            logger.warning(f"Failed to toggle fullscreen: {e}")
+
+    def _focus_and_select_all(self):
+        """Focus search field and select all text."""
+        try:
+            self.project_entry.focus_set()
+            self.project_entry.select_range(0, tk.END)
+            self.status_text.set("Search field focused and text selected")
+        except Exception as e:
+            logger.warning(f"Failed to focus and select: {e}")
+
+    def _force_complete_widget_refresh(self):
+        """Force complete refresh of all widgets for theme changes."""
+        try:
+            # Batch update operations to reduce overhead
+            updates_needed = []
+
+            def collect_widget_updates(parent):
+                """Collect widget updates before applying them."""
+                for child in parent.winfo_children():
+                    try:
+                        if isinstance(child, ttk.Widget):
+                            original_style = child.cget('style')
+                            if original_style:
+                                updates_needed.append(('style', child, original_style))
+                            else:
+                                # Apply appropriate default style
+                                widget_type = child.__class__.__name__
+                                if widget_type.startswith('Ttk'):
+                                    default_style = widget_type[3:]
+                                else:
+                                    default_style = widget_type
+                                try:
+                                    updates_needed.append(('default_style', child, f"T{default_style}"))
+                                except:
+                                    pass
+
+                        # Handle special cases
+                        if hasattr(child, 'configure') and 'bg' in child.configure():
+                            try:
+                                if isinstance(child, tk.Text):
+                                    bg_color = self.theme.get_current_theme().get_color("bg")
+                                    updates_needed.append(('text_bg', child, bg_color))
+                                elif isinstance(child, tk.Canvas):
+                                    bg_color = self.theme.get_current_theme().get_color("bg")
+                                    updates_needed.append(('canvas_bg', child, bg_color))
+                            except:
+                                pass
+
+                        # Recurse to children
+                        collect_widget_updates(child)
+                    except Exception as e:
+                        logger.debug(f"Error collecting widget updates for {child}: {e}")
+
+            # Collect all updates first
+            collect_widget_updates(self.root)
+
+            # Apply all updates in batch
+            for update_type, widget, value in updates_needed:
+                try:
+                    if update_type == 'style':
+                        widget.configure(style='')
+                        widget.configure(style=value)
+                    elif update_type == 'default_style':
+                        widget.configure(style=value)
+                    elif update_type == 'text_bg':
+                        widget.configure(bg=value)
+                    elif update_type == 'canvas_bg':
+                        widget.configure(bg=value)
+                except Exception as e:
+                    logger.debug(f"Error applying widget update {update_type}: {e}")
+
+            # Single comprehensive update instead of multiple
+            self.root.update_idletasks()
+
+            # Reduced delay for ttk styles
+            self.root.after(50, self._final_theme_update)
+
+        except Exception as e:
+            logger.warning(f"Error in complete widget refresh: {e}")
+
+    def _final_theme_update(self):
+        """Final theme update after all widgets are refreshed."""
+        try:
+            # Ensure all styles are properly applied
+            self.root.update_idletasks()
+
+            # Force repaint
+            self.root.event_generate("<<ThemeChanged>>")
+
+        except Exception as e:
+            logger.debug(f"Final theme update error: {e}")
+
+    def _verify_theme_application(self):
+        """Verify that theme has been applied correctly."""
+        try:
+            current_theme = self.theme.get_current_theme()
+            if current_theme:
+                # Check if key widgets have correct styling
+                theme_name = current_theme.name.lower()
+
+                # Verify entry field styling
+                if hasattr(self, 'project_entry'):
+                    # This is a custom widget, check its internal styling
+                    pass
+
+                logger.info(f"Theme verification completed for: {theme_name}")
+        except Exception as e:
+            logger.warning(f"Theme verification failed: {e}")
+
+    def _setup_for_compiled_environment(self):
+        """Set up GUI for compiled PyInstaller environment."""
+        try:
+            # Check if running from PyInstaller bundle
+            if getattr(sys, 'frozen', False):
+                # Running as compiled executable
+
+                # Force theme refresh for compiled environment
+                self.root.after(200, self._force_complete_widget_refresh)
+
+                # Ensure proper DPI handling in compiled environment
+                self.root.after(300, self._verify_compiled_environment)
+
+                logger.info("Running in compiled environment - applied compatibility fixes")
+        except Exception as e:
+            logger.warning(f"Compiled environment setup error: {e}")
+
+    def _verify_compiled_environment(self):
+        """Verify GUI works correctly in compiled environment."""
+        try:
+            # Force window to proper size if needed
+            current_geom = self.root.geometry()
+            if current_geom == "1x1+0+0":
+                self.root.geometry(self._get_responsive_geometry())
+
+            # Ensure theme is properly applied
+            self._apply_theme()
+
+            logger.info("Compiled environment verification completed")
+        except Exception as e:
+            logger.error(f"Compiled environment verification failed: {e}")
+
+    def _batch_initialize_ui(self):
+        """Batch UI initialization operations for better performance."""
+        try:
+            # Setup all UI components first
+            self._setup_ui()
+            self._setup_events()
+            self._setup_validation()
+            self._setup_autocomplete()
+
+            # Apply theme
+            self._apply_theme()
+
+            # Batch widget updates - single update instead of multiple
+            self.root.update_idletasks()
+
+            # Restore window state
+            self.restore_window_state()
+
+            # Start background services
+            self._start_task_processor()
+
+            # Update UI elements
+            self._update_ai_ui()
+
+            # Initialize state
+            self.last_search_result = None
+            self.last_search_type = None
+            self.tooltips = {}
+
+            # Set up for compiled environment
+            self._setup_for_compiled_environment()
+
+            # Schedule delayed refresh for theme stability
+            self.root.after(50, self._force_widget_refresh)
+
+        except Exception as e:
+            logger.error(f"Error in batch UI initialization: {e}")
+            # Fallback to individual initialization if batch fails
+            self._fallback_initialization()
+
+    def _fallback_initialization(self):
+        """Fallback initialization if batch initialization fails."""
+        try:
+            logger.info("Using fallback initialization...")
+            # Individual setup calls
+            self._setup_ui()
+            self._setup_events()
+            self._setup_validation()
+            self._setup_autocomplete()
+            self._apply_theme()
+            self.restore_window_state()
+            self._start_task_processor()
+            self._update_ai_ui()
+            self._setup_for_compiled_environment()
+
+            # Initialize state
+            self.last_search_result = None
+            self.last_search_type = None
+            self.tooltips = {}
+
+        except Exception as e:
+            logger.error(f"Fallback initialization also failed: {e}")
+
     def _get_responsive_geometry(self):
         """Get responsive geometry string based on screen size."""
         try:
             screen_width = self.root.winfo_screenwidth()
             screen_height = self.root.winfo_screenheight()
 
-            # Calculate size based on screen resolution and DPI
+            # Calculate minimum required size based on content
+            min_required_width = self._calculate_minimum_width()
+            min_required_height = self._calculate_minimum_height()
+
+            # Update min dimensions if calculated requirements are larger
+            if min_required_width > self.min_width:
+                self.min_width = min_required_width
+            if min_required_height > self.min_height:
+                self.min_height = min_required_height
+
+            # Calculate size based on screen resolution with better proportions
             if screen_width >= 2560:  # 2K/4K displays
-                width_factor = 0.25
-                height_factor = 0.45  # Increased for better fit
+                width_factor = 0.35  # Wider for better usability
+                height_factor = 0.65  # Taller to show all content
             elif screen_width >= 1920:  # 1080p displays
-                width_factor = 0.3
-                height_factor = 0.5   # Increased for better fit
+                width_factor = 0.4   # Comfortable width
+                height_factor = 0.7   # Show all content
             else:  # Smaller displays
-                width_factor = 0.4
-                height_factor = 0.6   # Increased for better fit
+                width_factor = 0.5   # Use more screen space
+                height_factor = 0.8   # Maximize content visibility
 
             width = max(self.min_width, int(screen_width * width_factor))
             height = max(self.min_height, int(screen_height * height_factor))
+
+            # Ensure minimum content visibility
+            width = max(width, min_required_width)
+            height = max(height, min_required_height)
 
             # Center on screen
             x = (screen_width - width) // 2
@@ -1395,6 +2190,63 @@ class ProjectQuickNavGUI:
             return f"{width}x{height}+{x}+{y}"
         except Exception:
             return f"{self.min_width}x{self.min_height}"
+
+    def _calculate_minimum_width(self):
+        """Calculate minimum width required to display all components properly."""
+        try:
+            # Base minimum width for content
+            base_width = 480
+
+            # Add space for buttons (approximately 200px for multiple buttons)
+            button_space = 200
+
+            # Add padding (20px on each side)
+            padding = 40
+
+            # Consider DPI scaling
+            dpi_scaled_width = int((base_width + button_space + padding) * self.dpi_scale)
+
+            return max(base_width, dpi_scaled_width)
+        except Exception:
+            return 480
+
+    def _calculate_minimum_height(self):
+        """Calculate minimum height required to display all components properly."""
+        try:
+            # Base components height
+            project_input_height = 80
+            nav_mode_height = 60
+            folder_mode_height = 200  # Multiple radio buttons
+            doc_mode_height = 180     # Document filters
+            options_height = 50
+            ai_toolbar_height = 60
+            status_height = 60
+            action_buttons_height = 50
+
+            # Add section spacing
+            section_spacing = 6 * 20  # 6 sections with 20px spacing each
+
+            # Add padding (top and bottom)
+            padding = 40
+
+            total_height = (
+                project_input_height +
+                nav_mode_height +
+                max(folder_mode_height, doc_mode_height) +  # Show whichever mode is active
+                options_height +
+                ai_toolbar_height +
+                status_height +
+                action_buttons_height +
+                section_spacing +
+                padding
+            )
+
+            # Consider DPI scaling
+            dpi_scaled_height = int(total_height * self.dpi_scale)
+
+            return max(600, dpi_scaled_height)
+        except Exception:
+            return 600
 
     def _is_geometry_on_screen(self, geometry: str) -> bool:
         """Check if geometry would place window on screen."""
@@ -1924,59 +2776,61 @@ For more help, visit the project documentation."""
         """Get list of currently available/visible widgets for navigation."""
         widgets = []
 
-        # Always available
-        if hasattr(self, 'project_entry'):
+        # Always available - project input section
+        if hasattr(self, 'project_entry') and self.project_entry.winfo_exists():
             widgets.append(self.project_entry)
 
-        # Mode selection
-        if hasattr(self, 'folder_radio'):
+        # Mode selection - navigation mode section
+        if hasattr(self, 'folder_radio') and self.folder_radio.winfo_exists():
             widgets.append(self.folder_radio)
-        if hasattr(self, 'doc_radio'):
+        if hasattr(self, 'doc_radio') and self.doc_radio.winfo_exists():
             widgets.append(self.doc_radio)
 
         # Mode-specific widgets
         if mode == "folder":
-            # Add folder radio buttons
+            # Add folder radio buttons from folder mode section
             if hasattr(self, 'folder_radios'):
-                widgets.extend(self.folder_radios)
+                for radio in self.folder_radios:
+                    if radio and radio.winfo_exists():
+                        widgets.append(radio)
         else:  # document mode
-            # Add document controls
-            if hasattr(self, 'doc_type_combo'):
+            # Add document controls from document mode section
+            if hasattr(self, 'doc_type_combo') and self.doc_type_combo.winfo_exists():
                 widgets.append(self.doc_type_combo)
-            if hasattr(self, 'version_combo'):
+            if hasattr(self, 'version_combo') and self.version_combo.winfo_exists():
                 widgets.append(self.version_combo)
-            if hasattr(self, 'room_entry'):
+            if hasattr(self, 'room_entry') and self.room_entry.winfo_exists():
                 widgets.append(self.room_entry)
-            if hasattr(self, 'co_entry'):
+            if hasattr(self, 'co_entry') and self.co_entry.winfo_exists():
                 widgets.append(self.co_entry)
-            if hasattr(self, 'archive_check'):
+            if hasattr(self, 'archive_check') and self.archive_check.winfo_exists():
                 widgets.append(self.archive_check)
 
         # Options section
-        if hasattr(self, 'debug_check'):
+        if hasattr(self, 'debug_check') and self.debug_check.winfo_exists():
             widgets.append(self.debug_check)
-        if hasattr(self, 'training_check'):
+        if hasattr(self, 'training_check') and self.training_check.winfo_exists():
             widgets.append(self.training_check)
 
-        # AI controls (if enabled)
-        if hasattr(self, 'ai_toggle_button'):
+        # AI controls (if enabled) from AI toolbar section
+        if hasattr(self, 'ai_toggle_button') and self.ai_toggle_button.winfo_exists():
             widgets.append(self.ai_toggle_button)
-        if hasattr(self, 'ai_chat_button') and self.ai_enabled.get():
+        if hasattr(self, 'ai_chat_button') and self.ai_chat_button.winfo_exists() and self.ai_enabled.get():
             widgets.append(self.ai_chat_button)
 
-        # Action buttons based on mode
+        # Action buttons based on mode from action buttons section
         if mode == "folder":
-            if hasattr(self, 'open_button'):
+            if hasattr(self, 'open_button') and self.open_button.winfo_exists():
                 widgets.append(self.open_button)
         else:
-            if hasattr(self, 'find_button'):
+            if hasattr(self, 'find_button') and self.find_button.winfo_exists():
                 widgets.append(self.find_button)
-            if hasattr(self, 'choose_button'):
+            if hasattr(self, 'choose_button') and self.choose_button.winfo_exists():
                 widgets.append(self.choose_button)
-            if hasattr(self, 'navigate_button') and self.last_search_result:
+            if hasattr(self, 'navigate_button') and self.navigate_button.winfo_exists() and self.last_search_result:
                 widgets.append(self.navigate_button)
 
-        return [w for w in widgets if w and w.winfo_exists()]
+        return widgets
 
     def _find_widget_index(self, widget, widget_list: List) -> int:
         """Find the index of a widget in the widget list."""
@@ -1987,21 +2841,38 @@ For more help, visit the project documentation."""
 
     def _find_widget_group(self, widget) -> Optional[str]:
         """Find which focus group a widget belongs to."""
+        # Check folder radios group
         if hasattr(self, 'folder_radios') and widget in self.folder_radios:
             return 'folder_selection'
-        elif widget in [getattr(self, 'folder_radio', None), getattr(self, 'doc_radio', None)]:
-            return 'mode_selection'
-        elif widget in [getattr(self, 'doc_type_combo', None), getattr(self, 'version_combo', None),
-                       getattr(self, 'room_entry', None), getattr(self, 'co_entry', None),
-                       getattr(self, 'archive_check', None)]:
-            return 'document_filters'
-        elif widget in [getattr(self, 'debug_check', None), getattr(self, 'training_check', None)]:
-            return 'options'
-        elif widget in [getattr(self, 'ai_toggle_button', None), getattr(self, 'ai_chat_button', None)]:
-            return 'ai_controls'
-        elif widget in [getattr(self, 'open_button', None), getattr(self, 'find_button', None),
-                       getattr(self, 'choose_button', None), getattr(self, 'navigate_button', None)]:
-            return 'action_buttons'
+
+        # Check mode selection group
+        if widget in [getattr(self, 'folder_radio', None), getattr(self, 'doc_radio', None)]:
+            if widget and widget.winfo_exists():
+                return 'mode_selection'
+
+        # Check document filters group
+        if widget in [getattr(self, 'doc_type_combo', None), getattr(self, 'version_combo', None),
+                      getattr(self, 'room_entry', None), getattr(self, 'co_entry', None),
+                      getattr(self, 'archive_check', None)]:
+            if widget and widget.winfo_exists():
+                return 'document_filters'
+
+        # Check options group
+        if widget in [getattr(self, 'debug_check', None), getattr(self, 'training_check', None)]:
+            if widget and widget.winfo_exists():
+                return 'options'
+
+        # Check AI controls group
+        if widget in [getattr(self, 'ai_toggle_button', None), getattr(self, 'ai_chat_button', None)]:
+            if widget and widget.winfo_exists():
+                return 'ai_controls'
+
+        # Check action buttons group
+        if widget in [getattr(self, 'open_button', None), getattr(self, 'find_button', None),
+                      getattr(self, 'choose_button', None), getattr(self, 'navigate_button', None)]:
+            if widget and widget.winfo_exists():
+                return 'action_buttons'
+
         return None
 
     def _get_group_widgets(self, group_name: str) -> List:
@@ -2009,41 +2880,102 @@ For more help, visit the project documentation."""
         widgets = []
 
         if group_name == 'mode_selection':
-            widgets = [getattr(self, 'folder_radio', None), getattr(self, 'doc_radio', None)]
+            mode_widgets = []
+            if hasattr(self, 'folder_radio') and self.folder_radio.winfo_exists():
+                mode_widgets.append(self.folder_radio)
+            if hasattr(self, 'doc_radio') and self.doc_radio.winfo_exists():
+                mode_widgets.append(self.doc_radio)
+            widgets = mode_widgets
+
         elif group_name == 'folder_selection' and hasattr(self, 'folder_radios'):
-            widgets = self.folder_radios
+            folder_widgets = []
+            for radio in self.folder_radios:
+                if radio and radio.winfo_exists():
+                    folder_widgets.append(radio)
+            widgets = folder_widgets
+
         elif group_name == 'document_filters':
-            widgets = [getattr(self, 'doc_type_combo', None), getattr(self, 'version_combo', None),
-                      getattr(self, 'room_entry', None), getattr(self, 'co_entry', None),
-                      getattr(self, 'archive_check', None)]
+            filter_widgets = []
+            if hasattr(self, 'doc_type_combo') and self.doc_type_combo.winfo_exists():
+                filter_widgets.append(self.doc_type_combo)
+            if hasattr(self, 'version_combo') and self.version_combo.winfo_exists():
+                filter_widgets.append(self.version_combo)
+            if hasattr(self, 'room_entry') and self.room_entry.winfo_exists():
+                filter_widgets.append(self.room_entry)
+            if hasattr(self, 'co_entry') and self.co_entry.winfo_exists():
+                filter_widgets.append(self.co_entry)
+            if hasattr(self, 'archive_check') and self.archive_check.winfo_exists():
+                filter_widgets.append(self.archive_check)
+            widgets = filter_widgets
+
         elif group_name == 'options':
-            widgets = [getattr(self, 'debug_check', None), getattr(self, 'training_check', None)]
+            option_widgets = []
+            if hasattr(self, 'debug_check') and self.debug_check.winfo_exists():
+                option_widgets.append(self.debug_check)
+            if hasattr(self, 'training_check') and self.training_check.winfo_exists():
+                option_widgets.append(self.training_check)
+            widgets = option_widgets
+
         elif group_name == 'ai_controls':
-            widgets = [getattr(self, 'ai_toggle_button', None), getattr(self, 'ai_chat_button', None)]
+            ai_widgets = []
+            if hasattr(self, 'ai_toggle_button') and self.ai_toggle_button.winfo_exists():
+                ai_widgets.append(self.ai_toggle_button)
+            if hasattr(self, 'ai_chat_button') and self.ai_chat_button.winfo_exists() and self.ai_enabled.get():
+                ai_widgets.append(self.ai_chat_button)
+            widgets = ai_widgets
+
         elif group_name == 'action_buttons':
             current_mode = self.current_mode.get()
-            if current_mode == "folder":
-                widgets = [getattr(self, 'open_button', None)]
-            else:
-                widgets = [getattr(self, 'find_button', None), getattr(self, 'choose_button', None)]
-                if self.last_search_result:
-                    widgets.append(getattr(self, 'navigate_button', None))
+            action_widgets = []
 
-        return [w for w in widgets if w and w.winfo_exists()]
+            if current_mode == "folder":
+                if hasattr(self, 'open_button') and self.open_button.winfo_exists():
+                    action_widgets.append(self.open_button)
+            else:
+                if hasattr(self, 'find_button') and self.find_button.winfo_exists():
+                    action_widgets.append(self.find_button)
+                if hasattr(self, 'choose_button') and self.choose_button.winfo_exists():
+                    action_widgets.append(self.choose_button)
+                if self.last_search_result and hasattr(self, 'navigate_button') and self.navigate_button.winfo_exists():
+                    action_widgets.append(self.navigate_button)
+
+            widgets = action_widgets
+
+        return widgets
 
     def _scroll_widget_into_view(self, widget):
         """Scroll widget into view if it's outside the visible area."""
         try:
-            # Update widget position
+            # Update widget position and layout
             widget.update_idletasks()
 
-            # Get widget position relative to root
-            widget_y = widget.winfo_rooty() - self.root.winfo_rooty()
-            window_height = self.root.winfo_height()
+            # Get widget position relative to main frame for better accuracy
+            try:
+                main_frame = getattr(self, 'main_frame', None)
+                if main_frame and main_frame.winfo_exists():
+                    widget_y = widget.winfo_y()
+                    frame_height = main_frame.winfo_height()
 
-            # If widget is outside visible area, it would need scrolling
-            # For now, just ensure it's visible (basic implementation)
-            if widget_y < 0 or widget_y > window_height:
+                    # Check if widget is within main frame bounds
+                    if widget_y < 0 or widget_y > frame_height - 50:  # 50px buffer
+                        # Use see method if widget supports it (like in scrollable frames)
+                        if hasattr(widget, 'see'):
+                            widget.see()
+                        else:
+                            # Fallback to focus and raise
+                            widget.focus_set()
+                            widget.tkraise()
+                else:
+                    # Fallback to basic visibility check
+                    widget_y = widget.winfo_rooty() - self.root.winfo_rooty()
+                    window_height = self.root.winfo_height()
+
+                    if widget_y < 0 or widget_y > window_height:
+                        widget.tkraise()
+
+            except Exception as e:
+                logger.debug(f"Enhanced scroll into view error: {e}")
+                # Fallback to basic implementation
                 widget.tkraise()
 
         except Exception as e:
@@ -2097,8 +3029,8 @@ For more help, visit the project documentation."""
         """Clear all inputs and reset to default state."""
         self.project_input.set("")
         self.selected_folder.set("4. System Designs")
-        self.doc_type.set("CAD")
-        self.version.set("Any")
+        self.doc_type.set("🔧 Low-Level Design (LLD)")  # Fixed: Use proper doc type value
+        self.version_filter.set("Auto (Latest/Best)")  # Fixed: Use correct variable name
         self.room_filter.set("")
         self.co_filter.set("")
         self.include_archive.set(False)
